@@ -1,0 +1,3 @@
+ARG PARENT
+FROM ${PARENT}
+USER root
