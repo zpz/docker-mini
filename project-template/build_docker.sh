@@ -29,7 +29,7 @@ function find-latest-mini {
 
     local url=https://hub.docker.com/v2/repositories/${name}/tags
 
-    tags="$(curl -L -s ${url} | tr -d '{}[]"' | tr ',' '\n' | grep name)" || return 1
+    tags="$(curl -Ls ${url} | tr -d '{}[]"' | tr ',' '\n' | grep name)" || tags=''
     if [[ "$tags" == "" ]]; then
         remoteimg=-
     else

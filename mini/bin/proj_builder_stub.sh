@@ -19,15 +19,17 @@ else
 fi
 
 
+NAMESPACE=$(cat "${thisdir}/docker/namespace") || exit 
+
 function build-dev {
+    local name="${NAMESPACE}/${REPO}"
     local builddir="${thisdir}/docker"
-    build-image ${builddir} zppz/${REPO}
+    local parent=$(cat "${thisdir}/docker/parent") || return 1
+    build-image ${builddir} ${name} ${parent}
 }
 
 
 function build-branch {
-    local name="zppz/${REPO}-${BRANCH}"
-
     local build_dir="/tmp/${REPO}"
     rm -rf ${build_dir}
     mkdir -p ${build_dir}
@@ -42,17 +44,20 @@ RUN mkdir -p /tmp/build
 COPY src/ /tmp/build
 
 RUN cd /tmp/build \\
-    && if [ -f setup_py ]; then pip-install . ; fi \\
+    && ( if [ -f setup_py ]; then pip-install . ; fi) \\
     && rm -rf /opt/${REPO} && mkdir -p /opt/${REPO} \\
-    && mkdir -p bin tests \\
-    && mv -f bin tests "/opt/${REPO}/" \\
+    && ( if [ -d bin ]; then mv -f bin "/opt/${REPO}/"; fi ) \\
+    && ( if [ -d tests ]; then mv -f tests "/opt/${REPO}/"; fi ) \\
+    && ( if [ -d test ]; then mv -f test "/opt/${REPO}/"; fi ) \\
+    && ( if [ -d sysbin ]; then mv -f sysbin/* "/usr/local/bin/"; fi ) \\
     && cd / \\
     && rm -rf /tmp/build
 EOF
 
-    echo zppz/${REPO} > "${build_dir}/parent"
+    local name="${NAMESPACE}/${REPO}-${BRANCH}"
+    local parent="${NAMESPACE}/${REPO}"
 
-    build-image "${build_dir}" ${name} || return 1
+    build-image "${build_dir}" ${name} ${parent} || return 1
     rm -rf "${build_dir}"
 }
 

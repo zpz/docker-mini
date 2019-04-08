@@ -37,6 +37,10 @@ daemon_mode=no
 as_root=no
 pull=no
 nb_port=8888
+memory_limit=12g
+shm_size=4g
+get_version=no
+
 
 # Parse arguments.
 # Before the argument for image name,
@@ -59,6 +63,18 @@ while [[ $# > 0 ]]; do
         elif [[ "$1" == -e ]]; then
             shift
             opts="${opts} -e $1"
+        elif [[ "$1" == --memory=* ]]; then
+            memory_limit="$1"
+            memory_limit="${memory_limit#*=}"
+        elif [[ "$1" == --memory ]]; then
+            shift
+            memory_limit="$1"
+        elif [[ "$1" == --shm-size=* ]]; then
+            shm_size="$1"
+            shm_size="${shm_size#*=}"
+        elif [[ "$1" == --shm-size ]]; then
+            shift
+            shm_size="$1"
         elif [[ "$1" == --nb_port ]]; then
             shift
             nb_port="$1"
@@ -71,6 +87,8 @@ while [[ $# > 0 ]]; do
             as_root=yes
         elif [[ "$1" == "--pull" ]]; then
             pull=yes
+        elif [[ "$1" == --version ]]; then
+            get_version=yes
         elif [[ "$1" == -* ]]; then
             opts="${opts} $1"
             if [[ "$1" == "-d" ]] || [[ "$1" == "--detach" ]]; then
@@ -287,6 +305,8 @@ opts="${opts}
 -e IMAGE_NAME=${imagename}
 -e IMAGE_VERSION=${imageversion}
 -e TZ=America/Los_Angeles
+--memory ${memory_limit}
+--shm-size ${shm_size}
 --init"
 
 if [[ "${is_ext_image}" == no ]] && [[ "${is_base_image}" == no ]]; then
