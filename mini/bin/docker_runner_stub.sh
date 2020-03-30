@@ -87,6 +87,14 @@ function run_docker {
             elif [[ "$1" == --name=* ]]; then
                 name="$1"
                 name="${name#*=}"
+            elif [[ "$1" == --restart ]]; then
+                shift
+                restart="$1"
+            elif [[ "$1" == --restart=* ]]; then
+                restart="$1"
+                restart="${restart#*=}"
+            elif [[ "$1" == "-d" ]] || [[ "$1" == "--detach" ]]; then
+                daemon_mode=yes
 
             elif [[ "$1" == --hostdatadir ]]; then
                 shift
@@ -133,15 +141,7 @@ function run_docker {
                 # because `run-docker` does not explicitly capture this option,
                 # hence it does not know this option has two parts.
                 # The same idea applies to other options.
-
-                if [[ "$1" == --restart=* ]]; then
-                    restart=set
-                fi
-
                 opts="${opts} $1"
-                if [[ "$1" == "-d" ]] || [[ "$1" == "--detach" ]]; then
-                    daemon_mode=yes
-                fi
             else
                 imagename="$1"
             fi
@@ -162,6 +162,12 @@ function run_docker {
         exit 1
     fi
 
+    if [[ ${restart} != '' ]]; then
+        opts="${opts} --restart=${restart}"
+    fi
+    if [[ "${daemon_mode}" == yes ]]; then
+        opts="${opts} -d"
+    fi
 
     local is_ext_image=no
     local is_dev_image=no
