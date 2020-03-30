@@ -1,6 +1,8 @@
-# Docker
+# docker-tools
 
-Some Docker images aimed at software development, especially using Python.
+Tools for a Docker stack for Python code development.
+
+Check out related repo [docker](https://github.com/zpz/docker).
 
 <!-- toc -->
 

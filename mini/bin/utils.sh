@@ -1,9 +1,12 @@
 # There are two ways to specify an image name (except for tag):
 #   python
-#   somerepo/xyz
+#   zppz/xyz
 #
 # The first one means the "official image" 'python'.
 # The second one includes namespace such as 'zppz'.
+# The name may be followed by ':tag', such as
+#
+#   zppz/xyz:20200318
 
 set -Eeuo pipefail
 
@@ -177,9 +180,43 @@ function find-latest-image {
 
 
 function find-image-id-local {
-    # Input is a full image name including tag.
+    # Input is a full image name including namespace and tag.
     local name="$1"
     docker images "${name}" --format "{{.ID}}"
+}
+
+
+function find-image-id-remote {
+    # Input is a full image name including namespace and tag.
+    local name="$1"
+    local tag="${name##*:}"
+    >&2 echo "getting manifest of remote image ${name}"
+    curl -v --silent -H 'Accept: application/vnd.docker.distribution.manifest.v2+json' ${name}/manifest/${tag} 2>&1 \
+        | awk '/config/,/}/' | grep digest | grep -o 'sha256:[0-9a-z]*'
+}
+
+
+function get-image-layers-local {
+    local name="$1"
+    if [[ ${name} != *:* ]]; then
+        >&2 echo "input image '${name}' does not contain tag"
+        return 1
+    fi
+    >&2 echo "getting manifest of local image '${name}'"
+    DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect ${name} \
+        | awk '/layers/,/]/' | grep digest | grep -o 'sha256:[0-9a-z]*' | tr '\n' ' '
+}
+
+
+function get-image-layers-remote {
+    local name="$1"
+    if [[ ${name} != *:* ]]; then
+        >&2 echo "input image '${name}' does not contain tag"
+        return 1
+    fi
+    local tag="${name##*:}"
+    curl --silent -H 'Accept application/vnd.docker.distribution.manifest.v2+json' ${name}/manifests/${tag} 2>&1 \
+        | awk '/layers/,/]/' | grep digest | grep -o 'sha256:[0-9a-z]*' | tr '\n' ' '
 }
 
 
@@ -213,7 +250,11 @@ function build-image {
     echo "=== $(date) ==="
     echo
 
-    docker build --build-arg PARENT="${PARENT}" -t "${FULLNAME}" "${BUILDDIR}" >&2 || return 1
+    cp -f ${BUILDDIR}/Dockerfile ${BUILDDIR}/_Dockerfile
+    echo >> ${BUILDDIR}/_Dockerfile
+    echo "ENV IMAGE_PARENT=${PARENT}" >> ${BUILDDIR}/_Dockerfile
+    docker build --build-arg PARENT="${PARENT}" -t "${FULLNAME}" "${BUILDDIR}" -f ${BUILDDIR}/_Dockerfile >&2 || return 1
+    rm -r ${BUILDDIR}/_Dockerfile
 
     local new_img="${FULLNAME}"
     if [[ "${old_img}" != - ]]; then
@@ -233,4 +274,80 @@ function build-image {
             docker rmi "${old_img}"
         fi
     fi
+}
+
+
+function pull-latest-image {
+    local imagename="$1"
+
+    if [[ "${imagename}" == *:* ]]; then
+        if [[ $(has-image-local ${imagename}) == no ]]; then
+            docker pull ${imagename}
+        fi
+        return 0
+    fi
+
+    local image_remote=$(find-latest-image-remote ${imagename}) || exit 1
+    if [[ "${image_remote}" == - ]]; then
+        return 0
+    fi
+
+    local image_local=$(find-latest-image-local ${imagename}) || exit 1
+    if [[ ${image_local} == - ]]; then
+        docker pull ${imagename}
+    fi
+
+    if [[ "${image_remote}" < "${image_local}" || "${image_remote}" == "${image_local}" ]]; then
+        return 0
+    fi
+    
+    local id_local=$(get-image-layers-local ${image_local})
+    local id_remote=$(get-image-layers-remote ${image_remote})
+    if [[ "${id_local}" == "${id_remote}" ]]; then
+        echo "Local image ${image_local} is identical to remote image ${image_remote}; adding remote tag to local image"
+        docker tag ${image_local} ${image_remote}
+        return 0
+    fi
+
+    local imgids_local=$(docker images -aq ${imagename})
+    docker pull ${image_remote}
+    echo
+    echo "Deleting the older images:"
+    echo "${imgids_local}"
+    docker rmi ${imgids_local} || true
+}
+
+
+function push-image {
+    local name="$1"
+
+    local img_remote=$(find-latest-image-remote ${name}) || return 1
+    local img_local=$(find-latest-image-local ${name}) || return 1
+    if [[ "${img_remote}" != - ]]; then
+        local id_remote=$(get-image-layers-remote ${img_remote}) || return 1
+        local id_local=$(get-image-layers-local ${img_local}) || return 1
+
+        echo
+        echo "remote image: ${img_remote}"
+        echo "remote id: ${id_remote}"
+        echo "local image: ${img_local}"
+        echo "local id: ${id_local}"
+        echo
+
+        if [[ "${id_remote}" == "${id_local}" ]]; then
+            echo "local version and remote version are identical; no need to push"
+            return 0
+        fi
+    fi
+
+    echo
+    echo "pushing ${img_local} to dockerhub"
+    docker push ${img_local}
+
+    # docker login --username ${DOCKERHUBUSERNAME} --password ${DOCKERHUBPASSWORD} || return 1
+
+    local id_remote_new=$(get-image-layers-remote ${img_local}) || return 1
+    echo
+    echo "new remote image: ${img_local}"
+    echo "new remote id: ${id_remote_new}"
 }

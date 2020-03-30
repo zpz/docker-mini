@@ -1,4 +1,4 @@
-# Install Docker on Linux.
+# Install Docker on a Ubuntu-based Linux, such as Linux Mint.
 # The Docker available from the default repos is not up to date.
 # The main point of this script is to install an up-to-date version.
 #

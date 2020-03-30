@@ -5,74 +5,42 @@ thisdir="$( cd $( dirname ${thisfile} ) && pwd )"
 
 source "${thisdir}/mini/bin/utils.sh"
 
-NAMESPACE=zppz
-
 
 function main {
-    local new_images=''
     local img
     local IMG
-    local old_img
-    local new_img
     local parent
     local builddir
 
     for img in "${IMAGES[@]}"; do
         IMG="${NAMESPACE}/${img}"
-        old_img=$(find-latest-image ${IMG}) || return 1
 
         builddir="${thisdir}/${img}"
         parent=$(cat "${builddir}/parent")
 
         build-image $builddir ${IMG} ${parent} || return 1
 
-        new_img=$(find-latest-image-local ${IMG}) || return 1
-        if [[ "${new_img}" != "${old_img}" ]]; then
-            new_images="${new_images} ${new_img}"
+        if [[ "${PUSH}" == yes ]]; then
+            push-image ${IMG}
         fi
     done
-
-    >&2 echo
-    >&2 echo "Finished building new images: ${new_images[@]}"
-    >&2 echo
-
-    if [[ "${PUSH}" == yes ]] && [[ "${new_images}" != '' ]]; then
-        >&2 echo
-        >&2 echo
-        >&2 echo '=== pushing images to Dockerhub ==='
-        docker login --username ${DOCKERHUBUSERNAME} --password ${DOCKERHUBPASSWORD} || return 1
-        >&2 echo
-        new_images=( ${new_images} )
-        for img in "${new_images[@]}"; do
-            >&2 echo
-            >&2 echo "pushing ${img}"
-            docker push "${img}" || return 1
-        done
-    fi
 }
 
-
-if [[ $# > 0 ]]; then
-    IMAGES=( $@ )
-else
-    IMAGES=( mini )
-fi
->&2 echo "IMAGES: ${IMAGES[@]}"
 
 # The images are pushed to Dockerhub only when built at github
 # by the integrated Travis-CI in branch `master`.
 
 if [ -z ${TRAVIS_BRANCH+x} ]; then
     BRANCH=''
+    PUSH=no
 else
     BRANCH=${TRAVIS_BRANCH}
-fi
-
-if [[ ${BRANCH} == master ]]; then
     PUSH=yes
-else
-    PUSH=no
 fi
->&2 echo "PUSH: ${PUSH}"
 
+NAMESPACE=zppz
+IMAGES=( mini )
+
+echo "Building images: ${IMAGES[@]}"
+echo
 main

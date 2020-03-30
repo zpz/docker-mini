@@ -1,24 +1,45 @@
 #!/usr/bin/env bash
 
-PULL=no
+# Set default name for image `mini` if not already defined.
+: "${MINI_IMAGE_NAME:=zppz/mini}"
+
+
+# Although we check `--local` anywhere in the command,
+# it's recommended to specify it before image name.
+use_local=no
 for arg in "$@"; do
-    if [[ "${arg}" == -* ]]; then
-        if [[ "${arg}" == --pull ]]; then
-            pull=yes
-            break
-        fi
-    else
+    if [[ "${arg}" == --local ]]; then
+        use_local=yes
         break
     fi
-done
+fi
+
+
+# Use `run-docker dryrun ...`
+# to print out the script w/o executing it, like
+#
+#    $ run-docker dryrun --local -p 8080:8080 abc > tt.sh
+#
+# After that we can do
+#
+#    $ bash tt.sh
+#
+# and debug it.
+# `dryrun` must immediately follow `run-docker`.
+dryrun=no
+if [[ $# > 0 ]];
+    if [[ "$1" == dryrun ]]; then
+        dryrun=yes
+        shift
+fi
 
 
 ###########################################################
-## Common content with ../doc/minimalproj/build_docker.sh
-## Use this version as reference.
+## Some common code with '../project-template/build_docker.sh';
+## keep in sync.
 
 function find-latest-mini-local {
-    local name=zppz/mini
+    local name="${MINI_IMAGE_NAME}"
 
     local tag=$(docker images "${name}" --format "{{.Tag}}" | sort | tail -n 1) || return 1
     if [[ "${tag}" == '' ]]; then
@@ -30,9 +51,13 @@ function find-latest-mini-local {
 
 
 function find-latest-mini {
-    local name=zppz/mini
+    local name="${MINI_IMAGE_NAME}"
 
     local localimg=$(find-latest-mini-local) || return 1
+    if [[ "${use_local}" == yes ]]; then
+        echo "${localimg}"
+        return
+    fi
 
     local url=https://hub.docker.com/v2/repositories/${name}/tags
     local tags="$(curl -L -s ${url} | tr -d '{}[]"' | tr ',' '\n' | grep name)" || return 1
@@ -60,15 +85,19 @@ function find-latest-mini {
 #############################
 
 
-if [[ "${PULL}" == yes ]]; then
-    IMG="$(find-latest-mini)" || exit 1
-else
-    IMG="$(find-latest-mini-local)" || exit 1
-fi
+IMG="$(find-latest-mini)" || exit 1
 if [[ "${IMG}" == - ]]; then
-    echo "Unable to find image 'mini'"
+    echo "Unable to find image '${MINI_IMAGE_NAME}'"
     exit 1
 fi
 
-cmd="$(docker run --rm ${IMG} make-docker-runner)" || exit 1
-bash -c "${cmd}" -- $@
+cmd="$(docker run --rm ${IMG} /usr/local/bin/make-docker-runner)" || exit 1
+if [[ "${dryrun}" == yes ]]; then
+    echo "# Your command-line arguments:"
+    echo "set -- $@"
+    echo
+    echo
+    echo "${cmd}"
+else
+    bash -c "${cmd}" -- $@
+fi

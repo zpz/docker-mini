@@ -6,3 +6,4 @@ thisdir="$( cd $( dirname ${thisfile} ) && pwd )"
 cat "${thisdir}/utils.sh"
 echo
 cat "${thisdir}/docker_runner_stub.sh"
+
