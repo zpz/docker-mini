@@ -168,16 +168,11 @@ function run_docker {
     local is_base_image=no
     local is_interactive=no
 
-    local namespace_default=zppz
-    if [[ "${imagename}" != */* ]]; then
-        imagename=${namespace_default}/${imagename}
-    else
-        if [[ ${imagename} != zppz/* ]]; then
-            is_ext_image=yes
-            if [[ ${imagename} != *:* ]]; then
-                >&2 echo "external image '${imagename}' must have tag specified"
-                exit 1
-            fi
+    if [[ ${imagename} != zppz/* ]]; then
+        is_ext_image=yes
+        if [[ ${imagename} != *:* ]]; then
+            >&2 echo "external image '${imagename}' must have tag specified"
+            exit 1
         fi
     fi
 
@@ -191,11 +186,17 @@ function run_docker {
         imagename=$(find-latest-image-local ${imagename}) || exit 1
     fi
 
-    local imagenamespace=${imagename%%/*}
     local imageversion=${imagename##*:}
+    local imagenamespace
     imagename=${imagename%:*}
-    imagename=${imagename#*/}
-    # Now `imagename` contains neither namespace nor tag.
+    local imagefullname="${imagename}"
+    if [[ "${imagename}" == */* ]]; then
+        imagenamespace=${imagename%%/*}
+        imagename=${imagename#*/}
+        # Now `imagename` contains neither namespace nor tag.
+    else
+        imagenamespace=''
+    fi
 
     if [[ ${command} == '' ]]; then
         if [[ ${imagename} == mini ]]; then
@@ -205,8 +206,8 @@ function run_docker {
         fi
     fi
 
-    if [[ "${args}" == '' \
-          && " /bin/bash /bin/sh bash sh python ptpython ptipython ipython " == *" {command} "* ]]; then
+    if [[ "${args}" == '' ]] \
+          && [[ " /bin/bash /bin/sh bash sh python ptpython ptipython ipython " == *" ${command} "* ]]; then
         is_interactive=yes
         opts="${opts} -it"
     fi
@@ -230,7 +231,7 @@ function run_docker {
         exit 1
     fi
 
-    local BASE_IMAES="dl jekyll mini py3r latex ml py3"
+    local BASE_IMAGES="dl jekyll mini py3r latex ml py3"
 
     local hostworkdir="${HOME}/work"
     mkdir -p ${hostworkdir}
@@ -244,7 +245,7 @@ function run_docker {
     fi
 
     if [[ ${name} == '' ]]; then
-        name="${whomai}-$(TZ=America/Los_Angeles date +Y%m%d-%H%M%S)"
+        name="$(whoami)-$(TZ=America/Los_Angeles date +%Y%m%d-%H%M%S)"
     fi
 
     opts="${opts}
@@ -321,7 +322,7 @@ function run_docker {
         opts="${opts} --workdir ${dockerhomedir}/src"
     fi
 
-    docker run ${opts} ${imagename}:${imageversion} ${command} ${args}
+    docker run ${opts} ${imagefullname}:${imageversion} ${command} ${args}
 }
 
 
