@@ -1,0 +1,222 @@
+#!/bin/bash
+
+THISDIR="$( pwd )"
+NAMESPACE=zppz
+REPO=$(basename "${THISDIR}")
+TINY=zppz/tiny:21.01.02
+
+
+if [ -d "${THISDIR}/.git" ]; then
+    BRANCH=$(cat "${THISDIR}/.git/HEAD")
+    BRANCH="${BRANCH##*/}"
+else
+    BRANCH=branch
+fi
+
+PY_PKG_NAME=$(cat "${THISDIR}/setup.py" | grep "^name =")
+PY_PKG_NAME=$(echo "${PY_PKG_NAME#*=}" | xargs)
+# `xargs` removes leading and trailing spaces.
+
+
+function build-image {
+    local name="$1"
+    local builddir="$2"
+    shift
+    shift
+    echo
+    echo
+    echo "=== build image ${name} ==="
+    echo "=== $(date) ==="
+    echo
+    docker build -t ${name} ${builddir} $@ || return 1
+}
+
+
+function build-dev {
+    local name="$1"
+    shift
+    build-image $name "${THISDIR}/docker" $@
+}
+
+
+function build-branch {
+    local name="$1"
+
+    # A project image's branched version is built on top of its
+    # 'dev' version. The only addition to the parent image is to
+    # install the repo's code (typically a Python package) in
+    # the image.
+    local parent="$2"
+
+    local build_dir="/tmp/${REPO}"
+    rm -rf ${build_dir}
+    mkdir -p ${build_dir}/src
+    [ -d ${THISDIR}/src ] && cp -R ${THISDIR}/src ${build_dir}/src/src
+    [ -d ${THISDIR}/bin ] && cp -R ${THISDIR}/bin ${build_dir}/src/bin
+    [ -d ${THISDIR}/sysbin ] && cp -R ${THISDIR}/sysbin ${build_dir}/src/sysbin
+    [ -d ${THISDIR}/tests ] && cp -R ${THISDIR}/tests ${build_dir}/src/tests
+    [ -f ${THISDIR}/setup.py ] && cp ${THISDIR}/setup.py ${build_dir}/src/
+    [ -f ${THISDIR}/setup.cfg ] && cp ${THISDIR}/setup.cfg ${build_dir}/src/
+    [ -f ${THISDIR}/MANIFEST.in ] && cp ${THISDIR}/MANIFEST.in ${build_dir}/src/
+    [ -f ${THISDIR}/install.sh ] && cp ${THISDIR}/install.sh ${build_dir}/src/
+
+    cat > "${build_dir}/Dockerfile" << EOF
+FROM ${parent}
+USER root
+
+ENV IMAGE_PARENT ${parent}
+
+RUN mkdir -p /tmp/build
+COPY src/ /tmp/build
+RUN cd /tmp/build \\
+    && ( if [ -f install.sh ]; then bash install.sh; elif [ -f setup.py ]; then python -m pip install --no-cache-dir . ; fi) \\
+    && mkdir -p /opt/${REPO} \\
+    && ( if [ -d bin ]; then mv -f bin "/opt/${REPO}/"; fi ) \\
+    && ( if [ -d tests ]; then mv -f tests "/opt/${REPO}/"; fi ) \\
+    && ( if [ -d sysbin ]; then mkdir -p /usr/local/bin && mv -f sysbin/* /usr/local/bin/; fi ) \\
+    && cd / \\
+    && rm -rf /tmp/build
+EOF
+
+    build-image ${name} "${build_dir}" || return 1
+    rm -rf "${build_dir}"
+}
+
+
+
+NAME=${REPO}
+TAG=
+COV_FAIL_UNDER=50  # use 0 to turn off tests
+DEV_OPTS=
+PUSH=
+
+while [[ $# > 0 ]]; do
+    if [[ "$1" == --name=* ]]; then
+        NAME="$1"
+        NAME="${NAME#--name=}"
+        shift
+    elif [[ "$1" == --name ]]; then
+        shift
+        if [[ $# == 0 ]]; then
+            >&2 echo "image name expected following --name"
+            exit 1
+        fi
+        NAME="$1"
+        shift
+    elif [[ "$1" == --push ]]; then
+        shift
+        PUSH=yes
+    elif [[ "$1" == --tag=* ]]; then
+        TAG="$1"
+        TAG="${TAG#--tag=}"
+        shift
+    elif [[ "$1" == --tag ]]; then
+        shift
+        if [[ $# == 0 ]]; then
+            >&2 echo "image tag expected following --tag"
+            exit 1
+        fi
+        TAG="$1"
+        shift
+    elif [[ "$1" == --test-cov=* ]]; then
+        COV_FAIL_UNDER="$1"
+        COV_FAIL_UNDER="${COV_FAIL_UNDER#--test-cov=}"
+        shift
+    elif [[ "$1" == --test-cov ]]; then
+        shift
+        if [[ $# == 0 ]]; then
+            >&2 echo "covarage requirement expected following --test-cov"
+            exit 1
+        fi
+        COV_FAIL_UNDER="$1"
+        shift
+    else
+        DEV_OPTS="${DEV_OPTS} $1"
+        shift
+    fi
+done
+
+if [ -z "${TAG}" ]; then
+    TAG=$(docker run --rm ${TINY} make-date-version)
+fi
+
+start_time=$(date)
+
+echo
+echo '############################'
+echo "start building dev image"
+echo '----------------------------'
+echo
+dev_img_name="${NAMESPACE}/${NAME}:${TAG}"
+build-dev ${dev_img_name} ${DEV_OPTS} || exit 1
+echo
+
+
+echo
+echo '############################'
+echo "start building branch image"
+echo '----------------------------'
+echo
+branch_img_name="${NAMESPACE}/${NAME}-${BRANCH}:${TAG}"
+build-branch ${branch_img_name} ${dev_img_name} || exit 1
+echo
+
+
+if [[ "${COV_FAIL_UNDER}" != 0 ]]; then
+    echo
+    echo '###########################'
+    echo "run tests in branch image ${branch_img_name}"
+    echo '---------------------------'
+    echo
+    rm -rf /tmp/docker-build-tests
+    mkdir -p /tmp/docker-build-tests/{data,log,cfg,tmp,src}
+
+    py_lib_loc=$(docker run --rm ${branch_img_name} python -c "import ${PY_PKG_NAME}; print(${PY_PKG_NAME}.__path__[0])")
+    echo pakcage source location: $py_lib_loc
+    echo
+
+    docker run \
+        ${branch_img_name} \
+        py.test -s --log-cli-level info -v --showlocals \
+        /opt/${REPO}/tests \
+        --cov=${py_lib_loc} \
+        --cov-fail-under ${COV_FAIL_UNDER}
+    if [[ $? == 0 ]]; then
+        rm -rf /tmp/docker-build-tests
+        echo
+        echo TESTS PASSED
+        echo
+    else
+        rm -rf /tmp/docker-build-tests
+        docker rmi -f ${branch_img_name}
+        echo
+        echo TESTS FAILED
+        echo
+        exit 1
+    fi
+fi
+
+
+if [[ "${PUSH}" == yes ]]; then
+    echo
+    echo
+    echo '#######################'
+    echo 'start pushing dev image'
+    echo '-----------------------'
+    echo
+    docker push ${dev_img_name}
+    echo
+    echo
+    echo '##########################'
+    echo 'start pushing branch image'
+    echo '--------------------------'
+    echo
+    docker push ${branch_img_name}
+fi
+
+
+end_time=$(date)
+echo
+echo "Started at ${start_time}"
+echo "Finished at ${end_time}"
+echo
