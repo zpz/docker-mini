@@ -12,10 +12,10 @@ if [[ $# > 0 ]]; then
     fi
 fi
 
-version="$(docker run --rm zppz/tiny:21.01.01 make-date-version)"
+version="$(docker run --rm zppz/tiny:21.01.02 make-date-version)"
 tag=zppz/mini:${version}
 
-docker build -t ${tag} ./mini
+docker build -t ${tag} .
 
 if [ "${push}" ]; then
     echo

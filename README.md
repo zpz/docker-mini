@@ -1,4 +1,4 @@
-# docker-tools
+# docker-mini
 
 Tools for a Docker stack for Python code development.
 

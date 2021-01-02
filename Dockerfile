@@ -1,4 +1,4 @@
 FROM busybox:1
 
-COPY tools/* /tools/
+COPY tools/* /usr/tools/
 CMD /bin/sh
