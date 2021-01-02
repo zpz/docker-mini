@@ -1,12 +1,6 @@
 #!/bin/bash
 
-
-thisfile="${BASH_SOURCE[0]}"
-thisdir="$( cd $( dirname ${thisfile} ) && pwd )"
-
-
-cmd="$(docker run --rm zppz/tiny:21.01.02 cat /usr/tools/find-image)"
-parent=$(bash -c "${cmd}" -- zppz/py3)
+thisdir="$( pwd )"
 
 
 function build-image {
