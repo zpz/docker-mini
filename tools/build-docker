@@ -5,7 +5,7 @@ thisfile="${BASH_SOURCE[0]}"
 thisdir="$( cd $( dirname ${thisfile} ) && pwd )"
 
 
-cmd="$(docker run --rm zppz/tiny:21.01.01 cat /find-image)"
+cmd="$(docker run --rm zppz/tiny:21.01.02 cat /usr/tools/find-image)"
 parent=$(bash -c "${cmd}" -- zppz/py3)
 
 
@@ -28,7 +28,7 @@ function build-dev {
     shift
     if [[ $# > 0 ]]; then
         parent="$1"
-        cmd="$(docker run --rm zppz/tiny:21.01.01 cat /find-image)"
+        cmd="$(docker run --rm zppz/tiny:21.01.02 cat /usr/tools/find-image)"
         parent=$(bash -c "${cmd}" -- ${parent})
         build-image $name "${thisdir}/docker" --build-arg PARENT=${parent}
     else
@@ -115,7 +115,7 @@ NAMESPACE=zppz
 
 NAME=${REPO}
 PARENT=
-TIMESTAMP=$(docker run --rm zppz/tiny:21.01.01 make-date-version)
+TIMESTAMP=$(docker run --rm zppz/tiny:21.01.02 make-date-version)
 run_tests=yes
 verbose_tests=
 cov_fail_under=1

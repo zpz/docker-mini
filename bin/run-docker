@@ -14,10 +14,10 @@ done
 
 TINY=zppz/tiny:21.01.02
 if [[ "${use_local}" == yes ]]; then
-    MINI=$(bash -c "$(docker run --rm zppz/tiny:21.01.01 cat /find-local-image)" -- zppz/mini)
+    MINI=$(bash -c "$(docker run --rm zppz/tiny:21.01.02 cat /usr/tools/find-local-image)" -- zppz/mini)
 else
-    MINI=$(bash -c "$(docker run --rm zppz/tiny:21.01.01 cat /find-image)" -- zppz/mini)
+    MINI=$(bash -c "$(docker run --rm zppz/tiny:21.01.02 cat /usr/tools/find-image)" -- zppz/mini)
 fi
 
-cmd="$(docker run --rm ${MINI} cat /tools/run-docker)"
+cmd="$(docker run --rm ${MINI} cat /usr/tools/run-docker)"
 bash -c "${cmd}" -- $@
