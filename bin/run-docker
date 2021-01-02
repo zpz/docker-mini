@@ -12,26 +12,7 @@ for arg in "$@"; do
     fi
 done
 
-# Use `run-docker dryrun ...`
-# to print out the script w/o executing it, like
-#
-#    $ run-docker dryrun --local -p 8080:8080 abc > tt.sh
-#
-# After that we can do
-#
-#    $ bash tt.sh
-#
-# and debug it.
-# `dryrun` must immediately follow `run-docker`.
-dryrun=no
-if [[ $# > 0 ]]; then
-    if [[ "$1" == dryrun ]]; then
-        dryrun=yes
-        shift
-    fi
-fi
-
-TINY=zppz/tiny:21.01.01
+TINY=zppz/tiny:21.01.02
 if [[ "${use_local}" == yes ]]; then
     MINI=$(bash -c "$(docker run --rm zppz/tiny:21.01.01 cat /find-local-image)" -- zppz/mini)
 else
@@ -39,12 +20,4 @@ else
 fi
 
 cmd="$(docker run --rm ${MINI} cat /tools/run-docker)"
-if [[ "${dryrun}" == yes ]]; then
-    echo "# Your command-line arguments:"
-    echo "set -- $@"
-    echo
-    echo
-    echo "${cmd}"
-else
-    bash -c "${cmd}" -- $@
-fi
+bash -c "${cmd}" -- $@

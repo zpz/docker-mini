@@ -190,10 +190,10 @@ if [[ "${daemon_mode}" == yes ]]; then
 fi
 
 if [[ ${use_local} == no ]]; then
-    cmd="$(docker run --rm zppz/tiny:21.01.01 cat /find-image)"
+    cmd="$(docker run --rm zppz/tiny:21.01.02 cat /find-image)"
     imagename=$(bash -c "${cmd}" -- ${imagename})
 else
-    cmd="$(docker run --rm zppz/tiny:21.01.01 cat /find-local-image)"
+    cmd="$(docker run --rm zppz/tiny:21.01.02 cat /find-local-image)"
     imagename=$(bash -c "${cmd}" -- ${imagename})
     opts="${opts} -e DOCKER_LOCAL_MODE=1"
 fi
