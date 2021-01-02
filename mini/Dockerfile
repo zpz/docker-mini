@@ -1,6 +1,4 @@
-ARG PARENT
-FROM ${PARENT}
-USER root
+FROM busybox:1
 
-COPY bin/* /usr/local/bin/
+COPY tools/* /tools/
 CMD /bin/sh

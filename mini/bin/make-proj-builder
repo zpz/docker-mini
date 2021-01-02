@@ -1,8 +1,0 @@
-#!/usr/bin/env sh
-
-thisfile="$0"
-thisdir="$( cd $( dirname ${thisfile} ) && pwd )"
-
-cat "${thisdir}/utils.sh"
-echo
-cat "${thisdir}/proj_builder_stub.sh"
