@@ -177,10 +177,17 @@ if [[ "${COV_FAIL_UNDER}" != 0 ]]; then
 
     docker run \
         ${branch_img_name} \
-        py.test -s --log-cli-level info -v --showlocals \
-        /opt/${REPO}/tests \
-        --cov=${py_lib_loc} \
-        --cov-fail-under ${COV_FAIL_UNDER}
+        py.test \
+            -s \
+            --log-cli-level info \
+            -v \
+            --showlocals \
+            --mypy \
+            --flake8 \
+            --cov=${py_lib_loc} \
+            --cov-fail-under ${COV_FAIL_UNDER} \
+            /opt/${REPO}/tests
+
     if [[ $? == 0 ]]; then
         rm -rf /tmp/docker-build-tests
         echo
