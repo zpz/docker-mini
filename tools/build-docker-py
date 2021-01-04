@@ -1,7 +1,8 @@
 #!/bin/bash
 
+set -e
+
 THISDIR="$( pwd )"
-NAMESPACE=zppz
 REPO=$(basename "${THISDIR}")
 TINY=zppz/tiny:21.01.02
 
@@ -13,8 +14,8 @@ else
     BRANCH=branch
 fi
 
-PY_PKG_NAME=$(cat "${THISDIR}/setup.py" | grep "^name =")
-PY_PKG_NAME=$(echo "${PY_PKG_NAME#*=}" | xargs)
+PY_PKG_NAME=$(grep '^name\s*=\s*[a-zA-Z][a-zA-Z0-9_-]*$' "${THISDIR}/setup.cfg")
+PY_PKG_NAME=$(echo "${PY_PKG_NAME#*=}" | xargs | tr '-' '_')
 # `xargs` removes leading and trailing spaces.
 
 
@@ -28,7 +29,7 @@ function build-image {
     echo "=== build image ${name} ==="
     echo "=== $(date) ==="
     echo
-    docker build -t ${name} ${builddir} $@ || return 1
+    docker build -t ${name} ${builddir} $@
 }
 
 
@@ -73,18 +74,19 @@ RUN cd /tmp/build \\
     && mkdir -p /opt/${REPO} \\
     && ( if [ -d bin ]; then mv -f bin "/opt/${REPO}/"; fi ) \\
     && ( if [ -d tests ]; then mv -f tests "/opt/${REPO}/"; fi ) \\
-    && ( if [ -d sysbin ]; then mkdir -p /usr/local/bin && mv -f sysbin/* /usr/local/bin/; fi ) \\
+    && ( if [ -d sysbin ]; then mkdir -p /usr/local/bin && mv sysbin/* /usr/local/bin/; fi ) \\
     && cd / \\
     && rm -rf /tmp/build
 EOF
 
-    build-image ${name} "${build_dir}" || return 1
+    build-image ${name} "${build_dir}"
     rm -rf "${build_dir}"
 }
 
 
 
 NAME=${REPO}
+NAMESPACE=
 TAG=
 COV_FAIL_UNDER=50  # use 0 to turn off tests
 DEV_OPTS=
@@ -98,10 +100,22 @@ while [[ $# > 0 ]]; do
     elif [[ "$1" == --name ]]; then
         shift
         if [[ $# == 0 ]]; then
-            >&2 echo "image name expected following --name"
+            >&2 echo "missing image name after --name"
             exit 1
         fi
         NAME="$1"
+        shift
+    elif [[ "$1" == --namespace=* ]]; then
+        NAMESPACE="$1"
+        NAMESPACE="${NAMESPACE#--namespace=}"
+        shift
+    elif [[ "$1" == --namespace ]]; then
+        shift
+        if [[ $# == 0 ]]; then
+            >&2 echo "missing namespace after --namespace"
+            exit 1
+        fi
+        NAMESPACE="$1"
         shift
     elif [[ "$1" == --push ]]; then
         shift
@@ -113,7 +127,7 @@ while [[ $# > 0 ]]; do
     elif [[ "$1" == --tag ]]; then
         shift
         if [[ $# == 0 ]]; then
-            >&2 echo "image tag expected following --tag"
+            >&2 echo "missing image tag after --tag"
             exit 1
         fi
         TAG="$1"
@@ -125,13 +139,16 @@ while [[ $# > 0 ]]; do
     elif [[ "$1" == --test-cov ]]; then
         shift
         if [[ $# == 0 ]]; then
-            >&2 echo "covarage requirement expected following --test-cov"
+            >&2 echo "missing covarage requirement after --test-cov"
             exit 1
         fi
         COV_FAIL_UNDER="$1"
         shift
     else
         DEV_OPTS="${DEV_OPTS} $1"
+        # All unrecognized options are passed on to
+        # the `docker build` command for the dev image.
+        # These may contain, e.g. `--build-arg ...`.
         shift
     fi
 done
@@ -140,6 +157,7 @@ if [ -z "${TAG}" ]; then
     TAG=$(docker run --rm ${TINY} make-date-version)
 fi
 
+
 start_time=$(date)
 
 echo
@@ -147,8 +165,12 @@ echo '############################'
 echo "start building dev image"
 echo '----------------------------'
 echo
-dev_img_name="${NAMESPACE}/${NAME}:${TAG}"
-build-dev ${dev_img_name} ${DEV_OPTS} || exit 1
+if [ "${NAMESPACE}" ]; then
+    dev_img_name="${NAMESPACE}/${NAME}:${TAG}"
+else
+    dev_img_name="${NAME}:${TAG}"
+fi
+build-dev ${dev_img_name} ${DEV_OPTS}
 echo
 
 
@@ -157,23 +179,28 @@ echo '############################'
 echo "start building branch image"
 echo '----------------------------'
 echo
-branch_img_name="${NAMESPACE}/${NAME}-${BRANCH}:${TAG}"
-build-branch ${branch_img_name} ${dev_img_name} || exit 1
+if [ "${NAMESPACE}" ]; then
+    branch_img_name="${NAMESPACE}/${NAME}-${BRANCH}:${TAG}"
+else
+    branch_img_name="${NAME}-${BRANCH}:${TAG}"
+fi
+build-branch ${branch_img_name} ${dev_img_name}
 echo
 
 
 if [[ "${COV_FAIL_UNDER}" != 0 ]]; then
     echo
-    echo '###########################'
+    echo '##########################################'
     echo "run tests in branch image ${branch_img_name}"
-    echo '---------------------------'
-    echo
+    echo '------------------------------------------'
     rm -rf /tmp/docker-build-tests
     mkdir -p /tmp/docker-build-tests/{data,log,cfg,tmp,src}
 
     py_lib_loc=$(docker run --rm ${branch_img_name} python -c "import ${PY_PKG_NAME}; print(${PY_PKG_NAME}.__path__[0])")
     echo pakcage source location: $py_lib_loc
     echo
+
+    set +e
 
     docker run \
         ${branch_img_name} \
@@ -201,6 +228,8 @@ if [[ "${COV_FAIL_UNDER}" != 0 ]]; then
         echo
         exit 1
     fi
+    
+    set -e
 fi
 
 
