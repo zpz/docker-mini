@@ -65,7 +65,7 @@ if [[ "${COV_FAIL_UNDER}" != 0 ]]; then
         --cov-report term-missing \
         --no-cov-on-fail \
         --cov-fail-under ${COV_FAIL_UNDER} \
-        /tmp/src/test_start_date
+        /tmp/src/tests
     if [[ $? == 0 ]]; then
         test_end_date=$(date)
         echo

@@ -11,7 +11,7 @@ MINI=$(bash -c "$(docker run --rm ${TINY} cat /usr/tools/find-image)" -- zppz/mi
 
 function build-dev {
     local name="$1"
-    docker build -t ${name} ${DEV_BUILD_OPTS} ${THISDIR}/docker
+    docker build -t ${name} ${DEV_OPTS} ${THISDIR}/docker
 }
 
 
@@ -65,7 +65,8 @@ function build-test {
     local build_dir=/tmp/src
     rm -rf ${build_dir}
     mkdir -p ${build_dir}/src
-    cp -R ${THISDIR}/{src,bin,tests} ${build_dir}/src
+    cp -R ${THISDIR}/{src,tests} ${build_dir}/src || return 1
+    [ -d ${THISDIR}/bin ] && cp -R ${THISDIR}/bin ${build_dir}/src
     cat > "${build_dir}/Dockerfile" <<EOF
 FROM ${parent}
 USER root
