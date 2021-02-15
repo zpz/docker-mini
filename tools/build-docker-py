@@ -5,38 +5,13 @@ set -e
 THISDIR="$( pwd )"
 REPO=$(basename "${THISDIR}")
 TINY=zppz/tiny:21.01.02
+MINI=$(bash -c "$(docker run --rm ${TINY} cat /usr/tools/find-image)" -- zppz/mini)
 
-
-if [ -d "${THISDIR}/.git" ]; then
-    BRANCH=$(cat "${THISDIR}/.git/HEAD")
-    BRANCH="${BRANCH##*/}"
-else
-    BRANCH=branch
-fi
-
-PY_PKG_NAME=$(grep '^name\s*=\s*[a-zA-Z][a-zA-Z0-9_-]*$' "${THISDIR}/setup.cfg")
-PY_PKG_NAME=$(echo "${PY_PKG_NAME#*=}" | xargs | tr '-' '_')
-# `xargs` removes leading and trailing spaces.
-
-
-function build-image {
-    local name="$1"
-    local builddir="$2"
-    shift
-    shift
-    echo
-    echo
-    echo "=== build image ${name} ==="
-    echo "=== $(date) ==="
-    echo
-    docker build -t ${name} ${builddir} $@
-}
 
 
 function build-dev {
     local name="$1"
-    shift
-    build-image $name "${THISDIR}/docker" $@
+    docker build -t ${name} ${DEV_BUILD_OPTS} ${THISDIR}/docker
 }
 
 
@@ -79,16 +54,37 @@ RUN cd /tmp/build \\
     && rm -rf /tmp/build
 EOF
 
-    build-image ${name} "${build_dir}"
+    docker build -t ${name} "${build_dir}" || return 1
     rm -rf "${build_dir}"
 }
 
+
+function build-test {
+    local parent="$1"  # this is the branch image
+    local name="$2"
+    local build_dir=/tmp/src
+    rm -rf ${build_dir}
+    mkdir -p ${build_dir}/src
+    cp -R ${THISDIR}/{src,bin,tests} ${build_dir}/src
+    cat > "${build_dir}/Dockerfile" <<EOF
+FROM ${parent}
+USER root
+RUN python -m pip install --no-cache-dir bandit mypy pyflakes radon pytest-cov pytest-sugar
+COPY src /tmp/src
+COPY --from=${MINI} /usr/tools/check-n-test /usr/local/bin
+ENTRYPOINT ["/usr/local/bin/check-n-test"]
+EOF
+    docker build -t ${name} ${build_dir} || return 1
+    rm -rf ${build_dir}
+}
 
 
 NAME=${REPO}
 NAMESPACE=
 TAG=
 COV_FAIL_UNDER=50  # use 0 to turn off tests
+FLAKES=yes
+MYPY=no
 DEV_OPTS=
 PUSH=
 
@@ -132,17 +128,20 @@ while [[ $# > 0 ]]; do
         fi
         TAG="$1"
         shift
-    elif [[ "$1" == --test-cov=* ]]; then
+    elif [[ "$1" == --cov-fail-under=* ]]; then
         COV_FAIL_UNDER="$1"
-        COV_FAIL_UNDER="${COV_FAIL_UNDER#--test-cov=}"
+        COV_FAIL_UNDER="${COV_FAIL_UNDER#--cov-fail-under=}"
         shift
-    elif [[ "$1" == --test-cov ]]; then
+    elif [[ "$1" == --cov-fail-under ]]; then
         shift
         if [[ $# == 0 ]]; then
-            >&2 echo "missing covarage requirement after --test-cov"
+            >&2 echo "missing covarage requirement after --cov-fail-under"
             exit 1
         fi
         COV_FAIL_UNDER="$1"
+        shift
+    elif [[ "$1" == --mypy ]]; then
+        MYPY=yes
         shift
     else
         DEV_OPTS="${DEV_OPTS} $1"
@@ -154,7 +153,7 @@ while [[ $# > 0 ]]; do
 done
 
 if [ -z "${TAG}" ]; then
-    TAG=$(docker run --rm ${TINY} make-date-version)
+    TAG=$(docker run --rm ${TINY} make-datetime-version)
 fi
 
 
@@ -170,9 +169,16 @@ if [ "${NAMESPACE}" ]; then
 else
     dev_img_name="${NAME}:${TAG}"
 fi
-build-dev ${dev_img_name} ${DEV_OPTS}
+build-dev ${dev_img_name} ${DEV_OPTS} || exit 1
 echo
 
+
+if [ -d "${THISDIR}/.git" ]; then
+    BRANCH=$(cat "${THISDIR}/.git/HEAD")
+    BRANCH="${BRANCH##*/}"
+else
+    BRANCH=branch
+fi
 
 echo
 echo '############################'
@@ -184,53 +190,33 @@ if [ "${NAMESPACE}" ]; then
 else
     branch_img_name="${NAME}-${BRANCH}:${TAG}"
 fi
-build-branch ${branch_img_name} ${dev_img_name}
+build-branch ${branch_img_name} ${dev_img_name} || exit 1
 echo
 
 
-if [[ "${COV_FAIL_UNDER}" != 0 ]]; then
-    echo
-    echo '##########################################'
-    echo "run tests in branch image ${branch_img_name}"
-    echo '------------------------------------------'
-    rm -rf /tmp/docker-build-tests
-    mkdir -p /tmp/docker-build-tests/{data,log,cfg,tmp,src}
+echo
+echo '############################'
+echo "start building test image"
+echo '----------------------------'
+echo
+test_img_name=test:latest
+build-test ${branch_img_name} ${test_img_name} || exit 1
 
-    py_lib_loc=$(docker run --rm ${branch_img_name} python -c "import ${PY_PKG_NAME}; print(${PY_PKG_NAME}.__path__[0])")
-    echo pakcage source location: $py_lib_loc
-    echo
 
-    set +e
+echo
+echo '############################'
+echo "run code checks and tests in test image"
+echo '----------------------------'
+echo
 
-    docker run \
-        ${branch_img_name} \
-        py.test \
-            -s \
-            --log-cli-level info \
-            -v \
-            --showlocals \
-            --mypy \
-            --flake8 \
-            --cov=${py_lib_loc} \
-            --cov-fail-under ${COV_FAIL_UNDER} \
-            /opt/${REPO}/tests
+PY_PKG_NAME=$(grep '^name\s*=\s*[a-zA-Z][a-zA-Z0-9_-]*$' "${THISDIR}/setup.cfg")
+PY_PKG_NAME=$(echo "${PY_PKG_NAME#*=}" | xargs | tr '-' '_')
+# `xargs` removes leading and trailing spaces.
 
-    if [[ $? == 0 ]]; then
-        rm -rf /tmp/docker-build-tests
-        echo
-        echo TESTS PASSED
-        echo
-    else
-        rm -rf /tmp/docker-build-tests
-        docker rmi -f ${branch_img_name}
-        echo
-        echo TESTS FAILED
-        echo
-        exit 1
-    fi
-    
-    set -e
-fi
+docker run \
+    ${test_img_name} \
+        ${PY_PKG_NAME} $FLAKES $MYPY $COV_FAIL_UNDER || exit 1
+
 
 
 if [[ "${PUSH}" == yes ]]; then

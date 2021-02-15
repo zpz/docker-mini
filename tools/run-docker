@@ -11,15 +11,16 @@ set -o pipefail
 
 USAGE=$(cat <<'EOF'
 Usage:
-   run-docker [options] image-name[:tag] [command [...]]
+
+   run-docker [--local] [options] <image-name>[:tag] [<cmd> [cmd-args]]
+
 where 
 
 `image-name` is like 'zppz/py3', etc.
-
-`command` is command to be run within the container, followed by arguments to the command.
-(Default: /bin/bash)
-
 If image tag is not specified, the most up-to-date tag is used.
+
+`cmd` is command to be run within the container, followed by arguments to the command.
+(Default: /bin/bash)
 EOF
 )
 

@@ -1,0 +1,82 @@
+#!/bin/bash
+
+PY_PKG_NAME="$1"
+shift
+FLAKES="$1"
+shift
+MYPY="$1"
+shift
+COV_FAIL_UNDER="$1"
+shift
+
+py_lib_loc=$(python -c "import ${PY_PKG_NAME}; print(${PY_PKG_NAME}.__path__[0])")
+
+# Currently these just report metrics.
+# See `xenon` to use it with thresholds.
+echo
+echo -- running radon for code complexity metrics ---
+echo
+echo    === Cyclomatic Complexity ===
+echo
+radon cc --min C --average --total-average /tmp/src/src/${PY_PKG_NAME}
+echo
+echo    === Maintainability Index ===
+echo
+radon mi --min B /tmp/src/src/${PY_PKG_NAME}
+echo
+echo    === Halstead Complexity ===
+echo
+radon hal /tmp/src/src/${PY_PKG_NAME}
+echo
+
+
+echo
+echo --- running bandit for security issues ---
+echo
+bandit -r -lll /tmp/src || exit 1
+
+
+if [[ "$FLAKES" == yes ]]; then
+    echo
+    echo --- running pyflakes for code issues ---
+    echo
+    python -m pyflakes /tmp/src/src/${PY_PKG_NAME} || exit 1
+fi
+
+
+if [[ "$MYPY" == yes ]]; then
+    echo
+    echo --- running mypy for typing issues ---
+    echo
+    python -m mypy /tmp/src/src/${PY_PKG_NAME} || exit 1
+fi
+
+
+if [[ "${COV_FAIL_UNDER}" != 0 ]]; then
+    test_start_date=$(date)
+    maxfail='--maxfail=1'
+    echo
+    echo --- running py.test ---
+    echo
+    py.test \
+        ${maxfail} \
+        -s --log-cli-level info -v --showlocals \
+        --cov=${py_lib_loc} \
+        --cov-report term-missing \
+        --no-cov-on-fail \
+        --cov-fail-under ${COV_FAIL_UNDER} \
+        /tmp/src/test_start_date
+    if [[ $? == 0 ]]; then
+        test_end_date=$(date)
+        echo
+        echo PASSED TESTS
+        echo
+        echo Tests started at:  ${test_start_date}
+        echo Tests finished at: ${test_end_date}
+        echo
+    else
+        >&2 echo
+        >&2 echo FAILED TESTS
+        exit 1
+    fi
+fi
