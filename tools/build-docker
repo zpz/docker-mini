@@ -62,18 +62,23 @@ EOF
 function build-test {
     local parent="$1"  # this is the branch image
     local name="$2"
+
     local build_dir=/tmp/src
     rm -rf ${build_dir}
     mkdir -p ${build_dir}/src
     cp -R ${THISDIR}/{src,tests} ${build_dir}/src || return 1
     [ -d ${THISDIR}/bin ] && cp -R ${THISDIR}/bin ${build_dir}/src
+
     cat > "${build_dir}/Dockerfile" <<EOF
 FROM ${parent}
 USER root
-RUN python -m pip install --no-cache-dir bandit mypy pyflakes radon pytest-cov pytest-sugar
+RUN python -m pip install --no-cache-dir bandit mypy pyflakes pylint radon pytest-cov pytest-sugar
 COPY src /tmp/src
 COPY --from=${MINI} /usr/tools/check-n-test /usr/local/bin
-ENTRYPOINT ["/usr/local/bin/check-n-test"]
+
+ENV TMPDIR /tmp/test-tmp
+ENV DATADIR /tmp/test-data
+RUN mkdir -p /tmp/test-tmp /tmp/test-data
 EOF
     docker build -t ${name} ${build_dir} || return 1
     rm -rf ${build_dir}
@@ -84,7 +89,6 @@ NAME=${REPO}
 NAMESPACE=
 TAG=
 COV_FAIL_UNDER=50  # use 0 to turn off tests
-FLAKES=yes
 MYPY=no
 DEV_OPTS=
 PUSH=
@@ -216,7 +220,7 @@ PY_PKG_NAME=$(echo "${PY_PKG_NAME#*=}" | xargs | tr '-' '_')
 
 docker run \
     ${test_img_name} \
-        ${PY_PKG_NAME} $FLAKES $MYPY $COV_FAIL_UNDER || exit 1
+        check-n-test ${PY_PKG_NAME} $MYPY $COV_FAIL_UNDER || exit 1
 
 
 

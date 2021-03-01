@@ -36,19 +36,27 @@ echo
 bandit -r -lll /tmp/src || exit 1
 
 
-if [[ "$FLAKES" == yes ]]; then
-    echo
-    echo --- running pyflakes for code issues ---
-    echo
-    python -m pyflakes /tmp/src/src/${PY_PKG_NAME} || exit 1
-fi
+echo
+echo --- running pyflakes for code issues ---
+echo
+python -m pyflakes /tmp/src/src/${PY_PKG_NAME} || exit 1
+
+
+echo
+echo --- running pylint for code issues ---
+echo
+python -m pylint \
+    --disable=C0103,C0114,C0115,C0116,C0301,C0303,C0305,R0903 \
+    /tmp/src/src/${PY_PKG_NAME}
+# pylint issues will not halt the build
 
 
 if [[ "$MYPY" == yes ]]; then
     echo
     echo --- running mypy for typing issues ---
     echo
-    python -m mypy /tmp/src/src/${PY_PKG_NAME} || exit 1
+    python -m mypy /tmp/src/src/${PY_PKG_NAME}
+    # mypy issues will not halt the build.
 fi
 
 
