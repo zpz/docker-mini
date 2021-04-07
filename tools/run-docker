@@ -226,15 +226,16 @@ fi
 if [[ "${as_root}" == yes ]] || [[ "$(id -un)" == root ]]; then
     dockerhomedir=/root
     opts="${opts} -e USER=root -u root"
-elif [[ $(uname) == Linux ]]; then
-    dockerhomedir="/home/$(id -un)"
-    opts="${opts} -e USER=$(id -un) -u $(id -u):$(id -g) -v /etc/passwd:/etc/passwd:ro"
-elif [[ $(uname) == Darwin ]]; then
+else
+# elif [[ $(uname) == Linux ]]; then
+#     dockerhomedir="/home/$(id -un)"
+#     opts="${opts} -e USER=$(id -un) -u $(id -u):$(id -g) -v /etc/passwd:/etc/passwd:ro"
+# elif [[ $(uname) == Darwin ]]; then
     dockerhomedir=/home/docker-user
     opts="${opts} -e USER=docker-user -u docker-user"
-else
-    >&2 echo "Platform $(uname) is not supported"
-    exit 1
+# else
+#     >&2 echo "Platform $(uname) is not supported"
+#     exit 1
 fi
 
 hostworkdir="${HOME}/work"

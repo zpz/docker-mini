@@ -68,10 +68,10 @@ if [[ "${COV_FAIL_UNDER}" != 0 ]]; then
     echo
     py.test \
         ${maxfail} \
-        -s --log-cli-level info -v --showlocals \
+        -s -v --showlocals \
+        --log-cli-level info \
         --cov=${py_lib_loc} \
         --cov-report term-missing \
-        --no-cov-on-fail \
         --cov-fail-under ${COV_FAIL_UNDER} \
         /tmp/src/tests
     if [[ $? == 0 ]]; then
