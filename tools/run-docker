@@ -35,7 +35,6 @@ name=""
 command=''
 args=""
 opts=""
-with_pythonpath=yes
 daemon_mode=no
 as_root=no
 use_local=no
@@ -46,9 +45,7 @@ restart=
 
 hostdatadir=''
 hostlogdir=''
-hosttmpdir=''
 hostsrcdir=''
-hostcfgdir=''
 
 # Parse arguments.
 # Before the argument for image name,
@@ -93,11 +90,6 @@ while [[ $# > 0 ]]; do
         elif [[ "$1" == --nb_port=* ]]; then
             nb_port="$1"
             nb_port="${nb_port#*=}"
-        elif [[ "$1" == --no-pythonpath ]]; then
-            # Do not put `~/src/src` on `$PYTHONPATH`.
-            # This has an effect only in the 'development' mode, i.e.
-            # when launching an image whose name does not end with '-[branchname]'.
-            with_pythonpath=no
         elif [[ "$1" == --root ]]; then
             as_root=yes
         elif [[ "$1" == --local ]]; then
@@ -129,24 +121,12 @@ while [[ $# > 0 ]]; do
         elif [[ "$1" == --hostlogdir=* ]]; then
             hostlogdir="$1"
             hostlogdir="${hostlogdir#*=}"
-        elif [[ "$1" == --hosttmpdir ]]; then
-            shift
-            hosttmpdir="$1"
-        elif [[ "$1" == --hosttmpdir=* ]]; then
-            hosttmpdir="$1"
-            hosttmpdir="${hosttmpdir#*=}"
         elif [[ "$1" == --hostsrcdir ]]; then
             shift
             hostsrcdir="$1"
         elif [[ "$1" == --hostsrcdir=* ]]; then
             hostsrcdir="$1"
             hostsrcdir="${hostsrcdir#*=}"
-        elif [[ "$1" == --hostcfgdir ]]; then
-            shift
-            hostcfgdir="$1"
-        elif [[ "$1" == --hostcfgdir=* ]]; then
-            hostcfgdir="$1"
-            hostcfgdir="${hostcfgdir#*=}"
 
         elif [[ "$1" == -* ]]; then
             # Every other argument is captured and passed on to `docker run`.
@@ -223,7 +203,7 @@ if [[ "${args}" == '' ]]; then
     fi
 fi
 
-if [[ "${as_root}" == yes ]] || [[ "$(id -un)" == root ]]; then
+if [[ "${as_root}" == yes ]]; then
     dockerhomedir=/root
     opts="${opts} -e USER=root -u root"
 else
@@ -243,11 +223,6 @@ opts="${opts} -e HOSTUSER=$(id -u):$(id -g)"
 hostworkdir="${HOME}/work"
 mkdir -p ${hostworkdir}
 
-if [ -d "${hostworkdir}/src/${imagename}" ]; then
-    is_dev_image=yes
-else
-    is_dev_image=no
-fi
 
 if [[ ${name} == '' ]]; then
     name="$(whoami)-$(TZ=America/Los_Angeles date +%Y%m%d-%H%M%S)"
@@ -269,45 +244,41 @@ fi
 
 opts="${opts} -e HOST_UNAME=$(uname) -e HOST_WHOAMI=$(whoami)"
 if [[ "$(uname)" == Linux ]]; then
-    opts="${opts} -e HOST_IP=$(hostname -i)"
+    # opts="${opts} -e HOST_IP=$(hostname -i)"
+    opts="${opts} -e HOST_IP=$(ip route get 1 | awk '{gsub("^.*src ",""); print $1; exit}')"
 fi
 
-if [[ "${hostdatadir}" == '' ]]; then
-    hostdatadir=${hostworkdir}/data
+if [[ "${hostdatadir}" == no ]]; then
+    opts="${opts} -e DATADIR=/tmp"
+else
+    if [[ "${hostdatadir}" == '' ]]; then
+        hostdatadir=${hostworkdir}/data
+    fi
+    mkdir -p ${hostdatadir}
+    opts="${opts} -v ${hostdatadir}:${dockerhomedir}/data"
+    opts="${opts} -e DATADIR=${dockerhomedir}/data"
 fi
-mkdir -p ${hostdatadir}
-opts="${opts} -v ${hostdatadir}:${dockerhomedir}/data"
-opts="${opts} -e DATADIR=${dockerhomedir}/data"
 
-if [[ "${hostlogdir}" == '' ]]; then
-    hostlogdir=${hostworkdir}/log
+if [[ "${hostlogdir}" == no ]]; then
+    opts="${opts} -e LOGDIR=/tmp"
+else
+    if [[ "${hostlogdir}" == '' ]]; then
+        hostlogdir=${hostworkdir}/log
+    fi
+    mkdir -p ${hostlogdir}
+    opts="${opts} -v ${hostlogdir}:${dockerhomedir}/log"
+    opts="${opts} -e LOGDIR=${dockerhomedir}/log"
 fi
-mkdir -p ${hostlogdir}
-opts="${opts} -v ${hostlogdir}:${dockerhomedir}/log"
-opts="${opts} -e LOGDIR=${dockerhomedir}/log"
 
-if [[ "${hostcfgdir}" == '' ]]; then
-    hostcfgdir=${hostworkdir}/cfg
-fi
-mkdir -p ${hostcfgdir}
-opts="${opts} -v ${hostcfgdir}:${dockerhomedir}/cfg"
-opts="${opts} -e CFGDIR=${dockerhomedir}/cfg"
-
-if [[ "${hosttmpdir}" == '' ]]; then
-    hosttmpdir=${hostworkdir}/tmp
-fi
-mkdir -p ${hosttmpdir}
-opts="${opts} -v ${hosttmpdir}:${dockerhomedir}/tmp"
-opts="${opts} -e TMPDIR=${dockerhomedir}/tmp"
-
-if [[ "${is_dev_image}" == yes ]]; then
+if [ -d "${hostworkdir}/src/${imagename}" ]; then
+    is_dev_image=yes
     if [[ "${hostsrcdir}" == '' ]]; then
         hostsrcdir="${hostworkdir}/src/${imagename}"
     fi
     opts="${opts} -v ${hostsrcdir}:${dockerhomedir}/src"
-    if [[ "${with_pythonpath}" == yes ]]; then
-        opts="${opts} -e PYTHONPATH=${dockerhomedir}/src/src"
-    fi
+    opts="${opts} -e PYTHONPATH=${dockerhomedir}/src/src"
+else
+    is_dev_image=no
 fi
 
 if [[ "${command}" == "notebook" ]]; then

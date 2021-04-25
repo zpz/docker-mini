@@ -75,10 +75,6 @@ USER root
 RUN python -m pip install --no-cache-dir bandit mypy pyflakes pylint radon pytest-cov pytest-sugar
 COPY src /tmp/src
 COPY --from=${MINI} /usr/tools/check-n-test /usr/local/bin
-
-ENV TMPDIR /tmp/test-tmp
-ENV DATADIR /tmp/test-data
-RUN mkdir -p /tmp/test-tmp /tmp/test-data
 EOF
     docker build -t ${name} ${build_dir} || return 1
     rm -rf ${build_dir}
