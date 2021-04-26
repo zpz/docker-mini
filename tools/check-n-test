@@ -2,10 +2,6 @@
 
 PY_PKG_NAME="$1"
 shift
-FLAKES="$1"
-shift
-MYPY="$1"
-shift
 COV_FAIL_UNDER="$1"
 shift
 
@@ -51,13 +47,11 @@ python -m pylint \
 # pylint issues will not halt the build
 
 
-if [[ "$MYPY" == yes ]]; then
-    echo
-    echo --- running mypy for typing issues ---
-    echo
-    python -m mypy /tmp/src/src/${PY_PKG_NAME}
-    # mypy issues will not halt the build.
-fi
+echo
+echo --- running mypy for typing issues ---
+echo
+python -m mypy /tmp/src/src/${PY_PKG_NAME}
+# mypy issues will not halt the build.
 
 
 if [[ "${COV_FAIL_UNDER}" != 0 ]]; then
