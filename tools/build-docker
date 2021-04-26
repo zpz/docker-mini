@@ -11,7 +11,8 @@ MINI=$(bash -c "$(docker run --rm ${TINY} cat /usr/tools/find-image)" -- zppz/mi
 
 function build-dev {
     local name="$1"
-    docker build -t ${name} ${DEV_OPTS} ${THISDIR}/docker
+    shift
+    docker build -t ${name} $@ ${THISDIR}
 }
 
 
@@ -27,14 +28,14 @@ function build-branch {
     local build_dir="/tmp/${REPO}"
     rm -rf ${build_dir}
     mkdir -p ${build_dir}/src
-    [ -d ${THISDIR}/src ] && cp -R ${THISDIR}/src ${build_dir}/src/src
+    cp -R ${THISDIR}/src ${build_dir}/src/src
+    cp -R ${THISDIR}/tests ${build_dir}/src/tests
+    cp ${THISDIR}/setup.py ${build_dir}/src/
+    cp ${THISDIR}/README.md ${build_dir}/src/
     [ -d ${THISDIR}/bin ] && cp -R ${THISDIR}/bin ${build_dir}/src/bin
     [ -d ${THISDIR}/sysbin ] && cp -R ${THISDIR}/sysbin ${build_dir}/src/sysbin
-    [ -d ${THISDIR}/tests ] && cp -R ${THISDIR}/tests ${build_dir}/src/tests
-    [ -f ${THISDIR}/setup.py ] && cp ${THISDIR}/setup.py ${build_dir}/src/
     [ -f ${THISDIR}/setup.cfg ] && cp ${THISDIR}/setup.cfg ${build_dir}/src/
     [ -f ${THISDIR}/MANIFEST.in ] && cp ${THISDIR}/MANIFEST.in ${build_dir}/src/
-    [ -f ${THISDIR}/install.sh ] && cp ${THISDIR}/install.sh ${build_dir}/src/
 
     cat > "${build_dir}/Dockerfile" << EOF
 FROM ${parent}
@@ -45,10 +46,10 @@ ENV IMAGE_PARENT ${parent}
 RUN mkdir -p /tmp/build
 COPY src/ /tmp/build
 RUN cd /tmp/build \\
-    && ( if [ -f install.sh ]; then bash install.sh; elif [ -f setup.py ]; then python -m pip install --no-cache-dir . ; fi) \\
+    && python -m pip install --no-cache-dir . \\
     && mkdir -p /opt/${REPO} \\
+    && mv -f tests "/opt/${REPO}/" \\
     && ( if [ -d bin ]; then mv -f bin "/opt/${REPO}/"; fi ) \\
-    && ( if [ -d tests ]; then mv -f tests "/opt/${REPO}/"; fi ) \\
     && ( if [ -d sysbin ]; then mkdir -p /usr/local/bin && mv sysbin/* /usr/local/bin/; fi ) \\
     && cd / \\
     && rm -rf /tmp/build
@@ -87,6 +88,11 @@ TAG=
 COV_FAIL_UNDER=50  # use 0 to turn off tests
 DEV_OPTS=
 PUSH=
+
+
+echo
+echo 1
+echo
 
 while [[ $# > 0 ]]; do
     if [[ "$1" == --name=* ]]; then
@@ -153,6 +159,13 @@ if [ -z "${TAG}" ]; then
     TAG=$(docker run --rm ${TINY} make-datetime-version)
 fi
 
+PY_PKG_NAME=$(grep '^name\s*=\s*.*$' "${THISDIR}/setup.py")
+PY_PKG_NAME=$(echo "${PY_PKG_NAME#*=}" | xargs)
+# `xargs` removes leading and trailing spaces.
+
+echo
+echo building for Python package "${PY_PKG_NAME}"
+echo
 
 start_time=$(date)
 
@@ -166,7 +179,7 @@ if [ "${NAMESPACE}" ]; then
 else
     dev_img_name="${NAME}:${TAG}"
 fi
-build-dev ${dev_img_name} ${DEV_OPTS} || exit 1
+build-dev ${dev_img_name} ${DEV_OPTS} --build-arg PYPKG=${PY_PKG_NAME}
 echo
 
 
@@ -187,7 +200,7 @@ if [ "${NAMESPACE}" ]; then
 else
     branch_img_name="${NAME}-${BRANCH}:${TAG}"
 fi
-build-branch ${branch_img_name} ${dev_img_name} || exit 1
+build-branch ${branch_img_name} ${dev_img_name}
 echo
 
 
@@ -197,7 +210,7 @@ echo "start building test image"
 echo '----------------------------'
 echo
 test_img_name=test:latest
-build-test ${branch_img_name} ${test_img_name} || exit 1
+build-test ${branch_img_name} ${test_img_name}
 
 
 echo
@@ -206,13 +219,10 @@ echo "run code checks and tests in test image"
 echo '----------------------------'
 echo
 
-PY_PKG_NAME=$(grep '^name\s*=\s*[a-zA-Z][a-zA-Z0-9_-]*$' "${THISDIR}/setup.cfg")
-PY_PKG_NAME=$(echo "${PY_PKG_NAME#*=}" | xargs | tr '-' '_')
-# `xargs` removes leading and trailing spaces.
 
 docker run \
     ${test_img_name} \
-        check-n-test ${PY_PKG_NAME} $COV_FAIL_UNDER || exit 1
+        check-n-test ${PY_PKG_NAME} $COV_FAIL_UNDER
 
 
 
