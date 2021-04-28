@@ -2,39 +2,73 @@
 
 set -e
 
+TINY=zppz/tiny:21.01.02
+NAMESPACE=zppz
+
 THISDIR="$( pwd )"
 REPO=$(basename "${THISDIR}")
-TINY=zppz/tiny:21.01.02
+NAME=${REPO}
+
 MINI=$(bash -c "$(docker run --rm ${TINY} cat /usr/tools/find-image)" -- zppz/mini)
+TAG=$(docker run --rm ${TINY} make-datetime-version)
 
+if [ -d "${THISDIR}/.git" ]; then
+    BRANCH=$(cat "${THISDIR}/.git/HEAD")
+    BRANCH="${BRANCH##*/}"
+else
+    BRANCH=branch
+fi
 
+PY_PKG_NAME=$(grep '^name\s*=\s*[a-zA-Z][a-zA-Z0-9_-]*$' "${THISDIR}/setup.cfg")
+PY_PKG_NAME=$(echo "${PY_PKG_NAME#*=}" | xargs | tr '-' '_')
+# `xargs` removes leading and trailing spaces.
 
-function build-dev {
-    local name="$1"
-    shift
-    docker build -t ${name} $@ ${THISDIR}
-}
+COV_FAIL_UNDER=50  # use 0 to turn off tests
+DEV_OPTS=
+
+while [[ $# > 0 ]]; do
+    if [[ "$1" == --cov-fail-under=* ]]; then
+        COV_FAIL_UNDER="$1"
+        COV_FAIL_UNDER="${COV_FAIL_UNDER#--cov-fail-under=}"
+        shift
+    elif [[ "$1" == --cov-fail-under ]]; then
+        shift
+        if [[ $# == 0 ]]; then
+            >&2 echo "missing covarage requirement after --cov-fail-under"
+            exit 1
+        fi
+        COV_FAIL_UNDER="$1"
+        shift
+    else
+        DEV_OPTS="${DEV_OPTS} $1"
+        # All unrecognized options are passed on to
+        # the `docker build` command for the dev image.
+        # These may contain, e.g. `--build-arg ...`.
+        shift
+    fi
+done
+
 
 
 function build-branch {
-    local name="$1"
-
     # A project image's branched version is built on top of its
     # 'dev' version. The only addition to the parent image is to
     # install the repo's code (typically a Python package) in
     # the image.
-    local parent="$2"
+    local parent="$1"
+    local name="$2"
 
     local build_dir="/tmp/${REPO}"
     rm -rf ${build_dir}
     mkdir -p ${build_dir}/src
     cp -R ${THISDIR}/src ${build_dir}/src/src
     cp -R ${THISDIR}/tests ${build_dir}/src/tests
-    cp ${THISDIR}/setup.py ${build_dir}/src/
+    cp ${THISDIR}/setup.cfg ${build_dir}/src/
     cp ${THISDIR}/README.md ${build_dir}/src/
     [ -d ${THISDIR}/bin ] && cp -R ${THISDIR}/bin ${build_dir}/src/bin
     [ -d ${THISDIR}/sysbin ] && cp -R ${THISDIR}/sysbin ${build_dir}/src/sysbin
-    [ -f ${THISDIR}/setup.cfg ] && cp ${THISDIR}/setup.cfg ${build_dir}/src/
+    [ -f ${THISDIR}/setup.py ] && cp ${THISDIR}/setup.py ${build_dir}/src/
+    [ -f ${THISDIR}/pyproject.toml ] && cp ${THISDIR}/pyproject.toml ${build_dir}/src/
     [ -f ${THISDIR}/MANIFEST.in ] && cp ${THISDIR}/MANIFEST.in ${build_dir}/src/
 
     cat > "${build_dir}/Dockerfile" << EOF
@@ -82,125 +116,29 @@ EOF
 }
 
 
-NAME=${REPO}
-NAMESPACE=
-TAG=
-COV_FAIL_UNDER=50  # use 0 to turn off tests
-DEV_OPTS=
-PUSH=
-
-
-echo
-echo 1
-echo
-
-while [[ $# > 0 ]]; do
-    if [[ "$1" == --name=* ]]; then
-        NAME="$1"
-        NAME="${NAME#--name=}"
-        shift
-    elif [[ "$1" == --name ]]; then
-        shift
-        if [[ $# == 0 ]]; then
-            >&2 echo "missing image name after --name"
-            exit 1
-        fi
-        NAME="$1"
-        shift
-    elif [[ "$1" == --namespace=* ]]; then
-        NAMESPACE="$1"
-        NAMESPACE="${NAMESPACE#--namespace=}"
-        shift
-    elif [[ "$1" == --namespace ]]; then
-        shift
-        if [[ $# == 0 ]]; then
-            >&2 echo "missing namespace after --namespace"
-            exit 1
-        fi
-        NAMESPACE="$1"
-        shift
-    elif [[ "$1" == --push ]]; then
-        shift
-        PUSH=yes
-    elif [[ "$1" == --tag=* ]]; then
-        TAG="$1"
-        TAG="${TAG#--tag=}"
-        shift
-    elif [[ "$1" == --tag ]]; then
-        shift
-        if [[ $# == 0 ]]; then
-            >&2 echo "missing image tag after --tag"
-            exit 1
-        fi
-        TAG="$1"
-        shift
-    elif [[ "$1" == --cov-fail-under=* ]]; then
-        COV_FAIL_UNDER="$1"
-        COV_FAIL_UNDER="${COV_FAIL_UNDER#--cov-fail-under=}"
-        shift
-    elif [[ "$1" == --cov-fail-under ]]; then
-        shift
-        if [[ $# == 0 ]]; then
-            >&2 echo "missing covarage requirement after --cov-fail-under"
-            exit 1
-        fi
-        COV_FAIL_UNDER="$1"
-        shift
-    else
-        DEV_OPTS="${DEV_OPTS} $1"
-        # All unrecognized options are passed on to
-        # the `docker build` command for the dev image.
-        # These may contain, e.g. `--build-arg ...`.
-        shift
-    fi
-done
-
-if [ -z "${TAG}" ]; then
-    TAG=$(docker run --rm ${TINY} make-datetime-version)
-fi
-
-PY_PKG_NAME=$(grep '^name\s*=\s*.*$' "${THISDIR}/setup.py")
-PY_PKG_NAME=$(echo "${PY_PKG_NAME#*=}" | xargs)
-# `xargs` removes leading and trailing spaces.
-
-echo
-echo building for Python package "${PY_PKG_NAME}"
-echo
 
 start_time=$(date)
 
+echo
+echo building for dev image
+echo
 echo
 echo '############################'
 echo "start building dev image"
 echo '----------------------------'
 echo
-if [ "${NAMESPACE}" ]; then
-    dev_img_name="${NAMESPACE}/${NAME}:${TAG}"
-else
-    dev_img_name="${NAME}:${TAG}"
-fi
-build-dev ${dev_img_name} ${DEV_OPTS} --build-arg PYPKG=${PY_PKG_NAME}
+dev_img_name="${NAMESPACE}/${NAME}:${TAG}"
+docker build -t ${dev_img_name} ${DEV_OPTS} ${THISDIR}/docker
 echo
 
-
-if [ -d "${THISDIR}/.git" ]; then
-    BRANCH=$(cat "${THISDIR}/.git/HEAD")
-    BRANCH="${BRANCH##*/}"
-else
-    BRANCH=branch
-fi
 
 echo
 echo '############################'
 echo "start building branch image"
 echo '----------------------------'
 echo
-if [ "${NAMESPACE}" ]; then
-    branch_img_name="${NAMESPACE}/${NAME}-${BRANCH}:${TAG}"
-else
-    branch_img_name="${NAME}-${BRANCH}:${TAG}"
-fi
-build-branch ${branch_img_name} ${dev_img_name}
+branch_img_name="${NAMESPACE}/${NAME}-${BRANCH}:${TAG}"
+build-branch ${dev_img_name} ${branch_img_name}
 echo
 
 
@@ -211,37 +149,14 @@ echo '----------------------------'
 echo
 test_img_name=test:latest
 build-test ${branch_img_name} ${test_img_name}
-
-
 echo
 echo '############################'
 echo "run code checks and tests in test image"
 echo '----------------------------'
 echo
-
-
 docker run \
     ${test_img_name} \
         check-n-test ${PY_PKG_NAME} $COV_FAIL_UNDER
-
-
-
-if [[ "${PUSH}" == yes ]]; then
-    echo
-    echo
-    echo '#######################'
-    echo 'start pushing dev image'
-    echo '-----------------------'
-    echo
-    docker push ${dev_img_name}
-    echo
-    echo
-    echo '##########################'
-    echo 'start pushing branch image'
-    echo '--------------------------'
-    echo
-    docker push ${branch_img_name}
-fi
 
 
 end_time=$(date)
