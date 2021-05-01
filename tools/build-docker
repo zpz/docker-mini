@@ -62,7 +62,6 @@ function build-branch {
     rm -rf ${build_dir}
     mkdir -p ${build_dir}/src
     cp -R ${THISDIR}/src ${build_dir}/src/src
-    cp -R ${THISDIR}/tests ${build_dir}/src/tests
     cp ${THISDIR}/setup.cfg ${build_dir}/src/
     cp ${THISDIR}/README.md ${build_dir}/src/
     [ -d ${THISDIR}/bin ] && cp -R ${THISDIR}/bin ${build_dir}/src/bin
@@ -82,7 +81,6 @@ COPY src/ /tmp/build
 RUN cd /tmp/build \\
     && python -m pip install --no-cache-dir . \\
     && mkdir -p /opt/${REPO} \\
-    && mv -f tests "/opt/${REPO}/" \\
     && ( if [ -d bin ]; then mv -f bin "/opt/${REPO}/"; fi ) \\
     && ( if [ -d sysbin ]; then mkdir -p /usr/local/bin && mv sysbin/* /usr/local/bin/; fi ) \\
     && cd / \\
