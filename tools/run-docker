@@ -14,7 +14,7 @@ Usage:
 
    run-docker [--local] [options] <image-name>[:tag] [<cmd> [cmd-args]]
 
-where 
+where
 
 `image-name` is like 'zppz/py3', etc.
 If image tag is not specified, the most up-to-date tag is used.
@@ -206,18 +206,18 @@ fi
 if [[ "${as_root}" == yes ]]; then
     dockerhomedir=/root
     opts="${opts} -e USER=root -u root"
+#elif [[ $(uname) == Linux ]]; then
+#    dockerhomedir="/home/$(id -un)"
+#    opts="${opts} -e USER=$(id -un) -u $(id -u):$(id -g) -v /etc/passwd:/etc/passwd:ro"
 else
-# elif [[ $(uname) == Linux ]]; then
-#     dockerhomedir="/home/$(id -un)"
-#     opts="${opts} -e USER=$(id -un) -u $(id -u):$(id -g) -v /etc/passwd:/etc/passwd:ro"
-# elif [[ $(uname) == Darwin ]]; then
+#elif [[ $(uname) == Darwin ]]; then
     dockerhomedir=/home/docker-user
     opts="${opts} -e USER=docker-user -u docker-user"
-# else
-#     >&2 echo "Platform $(uname) is not supported"
-#     exit 1
+#else
+#    >&2 echo "Platform $(uname) is not supported"
+#    exit 1
 fi
-opts="${opts} -e HOSTUSER=$(id -u):$(id -g)"
+opts="${opts} -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) -e HOST_UNAME=$(uname) -e HOST_WHOAMI=$(whoami)"
 
 
 hostworkdir="${HOME}/work"
@@ -242,7 +242,6 @@ if [ -z "${restart}" ] || [[ ${daemon_mode} == no ]]; then
     opts="${opts} --rm"
 fi
 
-opts="${opts} -e HOST_UNAME=$(uname) -e HOST_WHOAMI=$(whoami)"
 if [[ "$(uname)" == Linux ]]; then
     # opts="${opts} -e HOST_IP=$(hostname -i)"
     opts="${opts} -e HOST_IP=$(ip route get 1 | awk '{gsub("^.*src ",""); print $1; exit}')"
@@ -275,8 +274,8 @@ if [ -d "${hostworkdir}/src/${imagename}" ]; then
     if [[ "${hostsrcdir}" == '' ]]; then
         hostsrcdir="${hostworkdir}/src/${imagename}"
     fi
-    opts="${opts} -v ${hostsrcdir}:${dockerhomedir}/src"
-    opts="${opts} -e PYTHONPATH=${dockerhomedir}/src/src"
+    opts="${opts} -v ${hostsrcdir}:${dockerhomedir}/src/${imagename}"
+    opts="${opts} -e PYTHONPATH=${dockerhomedir}/src/${imagename}/src"
 else
     is_dev_image=no
 fi
@@ -293,7 +292,7 @@ fi
 if [[ "${command}" == notebook ]] || [[ "${is_dev_image}" == no ]]; then
     opts="${opts} --workdir ${dockerhomedir}"
 else
-    opts="${opts} --workdir ${dockerhomedir}/src"
+    opts="${opts} --workdir ${dockerhomedir}/src/${imagename}"
 fi
 
 docker run ${opts} ${imagefullname} ${command} ${args}

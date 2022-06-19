@@ -105,7 +105,7 @@ function build-test {
     cat > "${build_dir}/Dockerfile" <<EOF
 FROM ${parent}
 USER root
-RUN python -m pip install --no-cache-dir bandit mypy pyflakes pylint radon pytest-cov pytest-sugar
+RUN python -m pip install --no-cache-dir bandit mypy flake8 pylint radon pytest-sugar
 COPY src /tmp/src
 COPY --from=${MINI} /usr/tools/check-n-test /usr/local/bin
 EOF

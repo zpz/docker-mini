@@ -7,6 +7,19 @@ shift
 
 py_lib_loc=$(python -c "import ${PY_PKG_NAME}; print(${PY_PKG_NAME}.__path__[0])")
 
+
+echo
+echo --- running bandit for security issues ---
+echo
+bandit -r -lll /tmp/src || exit 1
+
+
+echo
+echo --- running flake8 for code issues ---
+echo
+python -m flake8 /tmp/src/src/${PY_PKG_NAME} || exit 1
+
+
 # Currently these just report metrics.
 # See `xenon` to use it with thresholds.
 echo
@@ -24,18 +37,6 @@ echo    === Halstead Complexity ===
 echo
 radon hal /tmp/src/src/${PY_PKG_NAME}
 echo
-
-
-echo
-echo --- running bandit for security issues ---
-echo
-bandit -r -lll /tmp/src || exit 1
-
-
-echo
-echo --- running pyflakes for code issues ---
-echo
-python -m pyflakes /tmp/src/src/${PY_PKG_NAME} || exit 1
 
 
 echo
