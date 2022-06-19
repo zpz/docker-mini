@@ -212,7 +212,8 @@ if [[ "${as_root}" == yes ]]; then
 else
 #elif [[ $(uname) == Darwin ]]; then
     dockerhomedir=/home/docker-user
-    opts="${opts} -e USER=docker-user -u docker-user"
+    # opts="${opts} -e USER=docker-user -u docker-user"
+    opts="${opts} -e USER=docker-user"
 #else
 #    >&2 echo "Platform $(uname) is not supported"
 #    exit 1
