@@ -1,0 +1,139 @@
+#!/bin/bash
+
+# In the root directory of a Python project repo, there is a script called `run`.
+# This script prepares a few env vars, then run the current script.
+#
+# The code relies on `pyproject.toml` to specify dependencies and various project info.
+# A Dockerfile is generated on the fly.
+# The Python package being developed in the repo is installed with all its mandatory and optional
+# dependencies. The the repo package itself is uninstalled, leaving the dependencies installed.
+#
+# The Docker image built is named zppz/<pkg>:dev
+#
+# Subsequently, the behavior depends on what Git branch is current.
+#
+# If branch is `main` or `master` or `release`,
+# then all tests are run.
+# If the branch is `release`, it further makes a release of the package.
+# The release artifacts will appear in `dist/` under the root of the repo.
+#
+# If branch is any other, then it is assumed user is doing development.
+# `run-docker` is used to determine all kinds of `docker-run` settings and finally
+# launch a container based on the newly built image, landing within the container
+# ready for development runs. The repo directory is volume-mapped into the container,
+# hence any test runs will use the latest code on the hosting machine.
+# You can edit code outside of the container, then run tests inside the container.
+
+
+set -e
+
+thisdir="$(cd $( pwd ) && pwd)"
+
+
+# Infer package name.
+rm -rf src/*egg-info
+proj="$(ls src/)"
+if [[ $proj = *' '* ]]; then
+    >&2 echo "unable to infer project name"
+    exit 1
+fi
+PROJ=${proj%/}
+
+echo "Work directory: ${thisdir}"
+echo "Project: ${PROJ}"
+if [[ "${PROJ}" == *_* ]]; then
+    >&2 "Project name '${PROJ}' contains underscore. Use dash instead."
+    exit 1
+fi
+
+
+# Infer branch name.
+branch=$(cat ${thisdir}/.git/HEAD)
+GITBRANCH=${branch##*refs/heads/}
+echo "Branch: ${GITBRANCH}"
+
+
+TINY="${TINY:-zppz/tiny:22.12.11}"
+cmd_find="$(docker run --rm ${TINY} cat /tools/find-image)"
+if [[ -z "${MINI}" ]]; then
+    MINI="$(bash -c "${cmd_find}" -- zppz/mini)"
+fi
+
+
+PARENT="${PARENT:-zppz/py3}"
+PARENT="$(bash -c "${cmd_find}" -- ${PARENT})"
+DOCKER_SRCDIR=/tmp/src
+
+
+rm -f Dockerfile
+cat <<EOF >Dockerfile
+ARG MINI
+ARG PARENT
+ARG DOCKER_SRCDIR
+FROM ${MINI} as mini-image
+
+ARG PARENT
+ARG DOCKER_SRCDIR
+FROM ${PARENT}
+USER root
+
+# If the repo needs non-Python dependencies, will need a mechanism
+# to insert a block to install other things, or use user-defined Dockerfile.
+
+
+# Install the package of the current repo along with all its required and optional
+# dependencies. Then, uninstall the project package itself and remove the source code from the image,
+# leaving the dependencies in place.
+# Dev and test within the container will use volume-mapped live code.
+
+ARG DOCKER_SRCDIR
+COPY --chown=docker-user:docker-user . "${DOCKER_SRCDIR}"
+RUN pip-install toml \\
+    && pyproj='${DOCKER_SRCDIR}/pyproject.toml' \\
+    && extras=\$(python -c "import toml; print(','.join(toml.load('\${pyproj}')['project']['optional-dependencies'].keys()))") \\
+    && pip-install ${DOCKER_SRCDIR}/[\${extras}] \\
+    && python -m pip uninstall -y \$(python -c "import toml; print(toml.load('\${pyproj}')['project']['name'])")
+
+COPY --from=mini-image /tools/pip-based/make-release /usr/local/bin
+COPY --from=mini-image /tools/pip-based/run-tests /usr/local/bin
+RUN chmod +x /usr/local/bin/run-tests /usr/local/bin/make-release
+
+USER docker-user
+EOF
+
+
+docker build --no-cache -f Dockerfile \
+    --build-arg PARENT="${PARENT}" \
+    --build-arg MINI="${MINI}" \
+    -t ${PROJ}:dev \
+    .
+echo
+
+if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == release ]]; then
+    docker run --rm \
+        --user=docker-user \
+        --workdir="${DOCKER_SRCDIR}" \
+        -e DATADIR=/tmp/data \
+        -e IMAGE_NAME=${PROJ} \
+        -e IMAGE_VERSION=dev \
+        -e PROJ="${PROJ}" \
+        -e PYTHONPATH="{DOCKER_SRCDIR}"/src \
+        ${PROJ}:dev run-tests
+
+    if [[ "${GITBRANCH}" == release ]]; then
+        docker run --rm \
+            --user=docker-user \
+            -v "${thisdir}/dist":/tmp/dist \
+            -e DISTDIR=/tmp/dist \
+            --workdir="${DOCKER_SRCDIR}" \
+            -e PROJ="${PROJ}" \
+            -e HOST_GITBRANCH="${GITBRANCH}" \
+            ${PROJ}:dev make-release
+    fi
+else
+    # Take a free ride to config githooks
+    git config --local core.hooksPath ${thisdir}/.githooks/
+    chmod +x ${thisdir}/.githooks/pre-push
+
+    run-docker ${PROJ}:dev
+fi

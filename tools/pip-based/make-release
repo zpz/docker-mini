@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Run this script within the container launched by `./run`.
+# If everything goes well, the built package is in dist/.
+# Outside of Docker, upload the package to PyPI by
+#   $ python3 -m twine upload dist/*
+
+
+set -e
+
+rm -rf "${DISTDIR}"
+mkdir -p "${DISTDIR}"
+python -m build ./ -o "${DISTDIR}"
+rm -rf src/*egg-info
+
+# Successful release will create a `dist/*.tar.gz` and a `dist/*.whl`.

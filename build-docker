@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
 
-version="$(docker run --rm zppz/tiny:21.01.02 make-date-version)"
+version="$(docker run --rm zppz/tiny:22.12.11 make-date-version)"
 tag=zppz/mini:${version}
 docker build -t ${tag} .
