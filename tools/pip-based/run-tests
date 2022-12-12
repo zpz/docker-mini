@@ -33,22 +33,22 @@ bandit -r -lll ${TESTS}
 echo
 echo --- running flake8 ---
 echo
-python -m flake8 --extend-ignore E203,E231,E501 "${SRC}"
-# python -m flake8 "${SRC}"
+# python -m flake8 --extend-ignore E203,E231,E501 "${SRC}"
+python -m flake8 "${SRC}"
 
 
 echo
 echo --- running mypy ---
 echo
-python -m mypy --show-error-codes --disable-error-code import ${SRC} || true
-# python -m mypy ${SRC} || true
+# python -m mypy --show-error-codes --disable-error-code import ${SRC} || true
+python -m mypy ${SRC} || true  # MyPy errors do not halt this script
 
 
 echo
 echo --- running pylint ---
 echo
-python -m pylint --disable=C0103,C0114,C0115,C0116,C0301,C0302,C0303,C0305,R0902,R0903,R1705,W0201,W0223 "${SRC}" || pylint-exit $?
-# python -m pylint --errors-only ${SRC} || pylint-exit $?
+# python -m pylint --disable=C0103,C0114,C0115,C0116,C0301,C0302,C0303,C0305,R0902,R0903,R1705,W0201,W0223 "${SRC}" || pylint-exit $?
+python -m pylint ${SRC} || pylint-exit $?
 
 
 echo
