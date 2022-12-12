@@ -38,7 +38,7 @@ echo "Work directory: ${thisdir}"
 
 # Infer the project name.
 # This is the name of the parent directory, but we infer it from Git config to be more reliable.
-proj="$(grep 'url = ' '${thisdir}/.git/config')"  # get the line like '   url = git@github.com:zpz/docker-mini.git'
+proj="$(grep 'url = ' "${thisdir}"/.git/config)"  # get the line like '   url = git@github.com:zpz/docker-mini.git'
 proj="${proj##*/}"  # remove the longest substr from front, keeping 'docker-mini.git'
 PROJ="${proj%.git}"  # remove substr from back
 if [[ "${PROJ}" == *_* ]]; then
@@ -53,7 +53,7 @@ echo "Project: ${PROJ}"
 # This does not need to be the "project" name defined in `pyproject.toml`, which is for `pypi` and `pip`,
 # related to install/uninstall.
 rm -rf "${thisdir}/src"/*egg-info  # these could have been created during package build
-pkg="$(ls '${thisdir}/src/')"
+pkg="$(ls "${thisdir}"/src/)"
 if [[ "${pkg}" == '' || $pkg = *' '* ]]; then  # zero or multiple subdirectories
     >&2 echo "unable to infer package name"
     exit 1
