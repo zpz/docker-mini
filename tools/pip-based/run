@@ -4,13 +4,14 @@
 # This script prepares a few env vars, then run the current script.
 #
 # The code relies on `pyproject.toml` to specify dependencies and various project info.
-# A Dockerfile is generated on the fly.
-# The Python package being developed in the repo is installed with all its mandatory and optional
-# dependencies. The the repo package itself is uninstalled, leaving the dependencies installed.
+# A Dockerfile is generated on the fly in this script.
+# While building the image,
+# the Python package being developed in the repo is installed with all its mandatory and optional
+# dependencies; then the repo package itself is uninstalled, leaving the dependencies installed.
 #
-# The Docker image built is named zppz/<pkg>:dev
+# The Docker image thus built is named zppz/<pkg>:dev
 #
-# Subsequently, the behavior depends on what Git branch is current.
+# Subsequent behavior depends on what Git branch is current.
 #
 # If branch is `main` or `master` or `release`,
 # then all tests are run.
@@ -18,70 +19,78 @@
 # The release artifacts will appear in `dist/` under the root of the repo.
 #
 # If branch is any other, then it is assumed user is doing development.
-# `run-docker` is used to determine all kinds of `docker-run` settings and finally
+# `run-docker` is then used to determine various `docker-run` settings and finally
 # launch a container based on the newly built image, landing within the container
-# ready for development runs. The repo directory is volume-mapped into the container,
+# ready for development testing. The repo directory is volume-mapped into the container,
 # hence any test runs will use the latest code on the hosting machine.
 # You can edit code outside of the container, then run tests inside the container.
+
+# This script should be run from the root directory of the repo.
+# This script does not use Python.
+# Python is used while "building the Docker image"; in that context, Python is provided by the base image.
 
 
 set -e
 
-thisdir="$(cd $( pwd ) && pwd)"
-
-
-# Infer package name.
-# The Python package name is defined in `pyproject.toml`.
-# It is usually the name of the directory under `src/` but it does not have to be.
-# Here we infer it from the directory name rather than from `pyproject.toml`
-# because the latter approch requires both Python and toml.
-# The env var `$PROJ` is passed into the container and is used by `run-tests`.
-# On the other hand, infer package name properly from `pyproject.toml` in Dockerfile.
-rm -rf src/*egg-info
-proj="$(ls src/)"
-if [[ $proj = *' '* ]]; then
-    >&2 echo "unable to infer project name"
-    exit 1
-fi
-PROJ=${proj%/}
-
+thisdir="$(cd $( pwd ) && pwd)"  # full path; do not use `${BASH_SOURCE[0]}` b/c this script is not invoked directly.
 echo "Work directory: ${thisdir}"
-echo "Project: ${PROJ}"
+
+
+# Infer the project name.
+# This is the name of the parent directory, but we infer it from Git config to be more reliable.
+proj="$(grep 'url = ' '${thisdir}/.git/config')"  # get the line like '   url = git@github.com:zpz/docker-mini.git'
+proj="${proj##*/}"  # remove the longest substr from front, keeping 'docker-mini.git'
+PROJ="${proj%.git}"  # remove substr from back
 if [[ "${PROJ}" == *_* ]]; then
     >&2 "Project name '${PROJ}' contains underscore. Use dash instead."
     exit 1
 fi
+echo "Project: ${PROJ}"
+
+
+# Infer the package name.
+# This is the name of the package code directory under `src/`, also the "import" name.
+# This does not need to be the "project" name defined in `pyproject.toml`, which is for `pypi` and `pip`,
+# related to install/uninstall.
+rm -rf "${thisdir}/src"/*egg-info  # these could have been created during package build
+pkg="$(ls '${thisdir}/src/')"
+if [[ "${pkg}" == '' || $pkg = *' '* ]]; then  # zero or multiple subdirectories
+    >&2 echo "unable to infer package name"
+    exit 1
+fi
+PKG=${pkg%/}  # remove '/' at the end
 
 
 # Infer branch name.
-branch=$(cat ${thisdir}/.git/HEAD)
-GITBRANCH=${branch##*refs/heads/}
+branch=$(cat "${thisdir}/.git/HEAD")
+GITBRANCH=${branch##*refs/heads/}  # remove the longest substr from front
 echo "Branch: ${GITBRANCH}"
 
 
+# In the real workflow, `$TINY`, `$MINI`, and `$PARENT` are already defined in the script that calls the current script.
+# Here we allow them to be missing so that the current script can be invoked directly
+# during development and debugging of this script.
 TINY="${TINY:-zppz/tiny:22.12.11}"
 cmd_find="$(docker run --rm ${TINY} cat /tools/find-image)"
+
 if [[ -z "${MINI}" ]]; then
     MINI="$(bash -c "${cmd_find}" -- zppz/mini)"
 fi
 
-
 PARENT="${PARENT:-zppz/py3}"
-PARENT="$(bash -c "${cmd_find}" -- ${PARENT})"
+PARENT="$(bash -c "${cmd_find}" -- ${PARENT})"  # find the latest version.
+
 DOCKER_SRCDIR=/tmp/src
+# Copy project repo to this location in the image.
 
-
-rm -f Dockerfile
-cat <<EOF >Dockerfile
-ARG MINI
-ARG PARENT
-ARG DOCKER_SRCDIR
+rm -f "${thisdir}"/Dockerfile
+cat <<EOF >"${thisdir}"/Dockerfile
 FROM ${MINI} as mini-image
 
-ARG PARENT
-ARG DOCKER_SRCDIR
 FROM ${PARENT}
 USER root
+
+ENV PARENT_IMAGE=${PARENT}
 
 # If the repo needs non-Python dependencies, will need a mechanism
 # to insert a block to install other things, or use user-defined Dockerfile.
@@ -94,9 +103,9 @@ USER root
 
 ARG DOCKER_SRCDIR
 COPY --chown=docker-user:docker-user . "${DOCKER_SRCDIR}"
-RUN pip-install toml \\
-    && pyproj='${DOCKER_SRCDIR}/pyproject.toml' \\
-    && extras=\$(python -c "import toml; print(','.join(toml.load('\${pyproj}')['project']['optional-dependencies'].keys()))") \\
+ARG pyproj="${DOCKER_SRCDIR}/pyproject.toml"
+
+RUN extras=\$(python -c "import toml; print(','.join(toml.load('\${pyproj}')['project']['optional-dependencies'].keys()))") \\
     && pip-install ${DOCKER_SRCDIR}/[\${extras}] \\
     && python -m pip uninstall -y \$(python -c "import toml; print(toml.load('\${pyproj}')['project']['name'])")
 
@@ -107,31 +116,25 @@ USER docker-user
 EOF
 
 
-docker build --no-cache -f Dockerfile \
-    --build-arg PARENT="${PARENT}" \
-    --build-arg MINI="${MINI}" \
-    -t ${PROJ}:dev \
-    .
+docker build --no-cache -f "${thisdir}"/Dockerfile -t ${PROJ}:dev "${thisdir}"
 echo
-rm -f Dockerfile
 
 if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == release ]]; then
     docker run --rm \
-        --user=docker-user \
-        --workdir="${DOCKER_SRCDIR}" \
         -e IMAGE_NAME=${PROJ} \
         -e IMAGE_VERSION=dev \
+        -e PKG="${PKG}" \
         -e PROJ="${PROJ}" \
+        --workdir="${DOCKER_SRCDIR}" \
         -e PYTHONPATH="${DOCKER_SRCDIR}"/src \
         ${PROJ}:dev run-tests
 
     if [[ "${GITBRANCH}" == release ]]; then
         docker rm "${PROJ}-release"
         docker run \
-            --user=docker-user \
             --workdir="${DOCKER_SRCDIR}" \
             --name="${PROJ}"-release \
-            ${PROJ}:dev python -m build .
+            ${PROJ}:dev python -m build '.'
         rm -rf "${thisdir}/dist"
         docker cp "${PROJ}-release":"${DOCKER_SRCDIR}/dist" "${thisdir}"
         docker rm "${PROJ}-release"
@@ -140,10 +143,12 @@ if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == re
         # Outside of Docker, upload the package to PyPI by
         #   $ python3 -m twine upload dist/*
     fi
+    rm -f "${thisdir}"/Dockerfile
 else
     # Take a free ride to config githooks
-    git config --local core.hooksPath ${thisdir}/.githooks/
-    chmod +x ${thisdir}/.githooks/pre-push
+    git config --local core.hooksPath "${thisdir}/.githooks/"
+    chmod +x "${thisdir}/.githooks/pre-push"
 
+    rm -f "${thisdir}"/Dockerfile
     run-docker ${PROJ}:dev
 fi

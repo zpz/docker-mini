@@ -4,10 +4,24 @@
 
 
 set -e
+thisdir="$(pwd)"
 
+if [ -z "${PKG}" ]; then
+    # Infer the package name.
+    # This is the name of the package code directory under `src/`, also the "import" name.
+    # This does not need to be the "project" name defined in `pyproject.toml`, which is for `pypi` and `pip`,
+    # related to install/uninstall.
+    rm -rf "${thisdir}/src"/*egg-info  # these could have been created during package build
+    pkg="$(ls '${thisdir}/src/')"
+    if [[ "${pkg}" == '' || $pkg = *' '* ]]; then  # zero or multiple subdirectories
+        >&2 echo "unable to infer package name"
+        exit 1
+    fi
+    PKG=${pkg%/}  # remove '/' at the end
+fi
 
-SRC=$(pwd)/src/${PROJ//-/_}
-TESTS=$(pwd)/tests
+SRC="${thisdir}"/src/${PKG}
+TESTS="${thisdir}"/tests
 
 
 echo
@@ -20,11 +34,15 @@ echo
 echo --- running flake8 ---
 echo
 python -m flake8 --extend-ignore E203,E231,E501 "${SRC}"
+# python -m flake8 "${SRC}"
+
 
 echo
 echo --- running mypy ---
 echo
 python -m mypy --show-error-codes --disable-error-code import ${SRC} || true
+# python -m mypy ${SRC} || true
+
 
 echo
 echo --- running pylint ---
@@ -36,8 +54,7 @@ python -m pylint --disable=C0103,C0114,C0115,C0116,C0301,C0302,C0303,C0305,R0902
 echo
 echo --- running tests ---
 echo
-py.test --cov=${PROJ//-/_} --cov-report term-missing ${TESTS}
+# py.test --cov=${PKG} --cov-report term-missing ${TESTS}
+coverage run --source="${thisdir}/src" -m pytest -n auto ${TESTS}
+coverage report
 # Test coverage target is specified in `pyproject.toml`.
-
-# coverage run --data-file=/tmp/.coverage --source=${SRC} -m pytest ${TESTS} -n auto
-# coverage report --data-file=/tmp/.coverage
