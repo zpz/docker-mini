@@ -3,4 +3,4 @@ set -e
 
 version="$(docker run --rm zppz/tiny:22.12.11 make-date-version)"
 tag=zppz/mini:${version}
-docker build -t ${tag} .
+docker build --no-cache -t ${tag} .
