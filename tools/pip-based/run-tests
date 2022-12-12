@@ -12,7 +12,7 @@ if [ -z "${PKG}" ]; then
     # This does not need to be the "project" name defined in `pyproject.toml`, which is for `pypi` and `pip`,
     # related to install/uninstall.
     rm -rf "${thisdir}/src"/*egg-info  # these could have been created during package build
-    pkg="$(ls '${thisdir}/src/')"
+    pkg="$(ls "${thisdir}"/src/)"
     if [[ "${pkg}" == '' || $pkg = *' '* ]]; then  # zero or multiple subdirectories
         >&2 echo "unable to infer package name"
         exit 1
