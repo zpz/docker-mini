@@ -31,6 +31,12 @@ thisdir="$(cd $( pwd ) && pwd)"
 
 
 # Infer package name.
+# The Python package name is defined in `pyproject.toml`.
+# It is usually the name of the directory under `src/` but it does not have to be.
+# Here we infer it from the directory name rather than from `pyproject.toml`
+# because the latter approch requires both Python and toml.
+# The env var `$PROJ` is passed into the container and is used by `run-tests`.
+# On the other hand, infer package name properly from `pyproject.toml` in Dockerfile.
 rm -rf src/*egg-info
 proj="$(ls src/)"
 if [[ $proj = *' '* ]]; then
@@ -94,9 +100,8 @@ RUN pip-install toml \\
     && pip-install ${DOCKER_SRCDIR}/[\${extras}] \\
     && python -m pip uninstall -y \$(python -c "import toml; print(toml.load('\${pyproj}')['project']['name'])")
 
-COPY --from=mini-image /tools/pip-based/make-release /usr/local/bin
 COPY --from=mini-image /tools/pip-based/run-tests /usr/local/bin
-RUN chmod +x /usr/local/bin/run-tests /usr/local/bin/make-release
+RUN chmod +x /usr/local/bin/run-tests
 
 USER docker-user
 EOF
@@ -113,22 +118,26 @@ if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == re
     docker run --rm \
         --user=docker-user \
         --workdir="${DOCKER_SRCDIR}" \
-        -e DATADIR=/tmp/data \
         -e IMAGE_NAME=${PROJ} \
         -e IMAGE_VERSION=dev \
         -e PROJ="${PROJ}" \
-        -e PYTHONPATH="{DOCKER_SRCDIR}"/src \
+        -e PYTHONPATH="${DOCKER_SRCDIR}"/src \
         ${PROJ}:dev run-tests
 
     if [[ "${GITBRANCH}" == release ]]; then
-        docker run --rm \
+        docker rm "${PROJ}-release"
+        docker run \
             --user=docker-user \
-            -v "${thisdir}/dist":/tmp/dist \
-            -e DISTDIR=/tmp/dist \
             --workdir="${DOCKER_SRCDIR}" \
-            -e PROJ="${PROJ}" \
-            -e HOST_GITBRANCH="${GITBRANCH}" \
-            ${PROJ}:dev make-release
+            --name="${PROJ}"-release \
+            ${PROJ}:dev python -m build .
+        rm -rf "${thisdir}/dist"
+        docker cp "${PROJ}-release":"${DOCKER_SRCDIR}/dist" "${thisdir}"
+        docker rm "${PROJ}-release"
+        echo "Release artifacts are saved in '${thisdir}/dist'"
+        # Successful release will create a `dist/*.tar.gz` and a `dist/*.whl`.
+        # Outside of Docker, upload the package to PyPI by
+        #   $ python3 -m twine upload dist/*
     fi
 else
     # Take a free ride to config githooks

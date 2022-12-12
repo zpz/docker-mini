@@ -36,7 +36,7 @@ python -m pylint --disable=C0103,C0114,C0115,C0116,C0301,C0302,C0303,C0305,R0902
 echo
 echo --- running tests ---
 echo
-py.test -n auto --cov=${PROJ//-/_} --cov-report term-missing ${TESTS}
+py.test --cov=${PROJ//-/_} --cov-report term-missing ${TESTS}
 # Test coverage target is specified in `pyproject.toml`.
 
 # coverage run --data-file=/tmp/.coverage --source=${SRC} -m pytest ${TESTS} -n auto

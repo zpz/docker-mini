@@ -244,6 +244,5 @@ DATAVOLUME=docker-data-volume
 MOUNTPOINT="${DOCKERHOMEDIR}/mnt"
 VOLOPT="--mount source=${DATAVOLUME},target=${MOUNTPOINT}"
 
-set -x
 docker run ${opts} ${VOLOPT} ${IMAGENAME} ${command} ${args}
 

@@ -8,9 +8,9 @@
 
 set -e
 
-rm -rf "${DISTDIR}"
-mkdir -p "${DISTDIR}"
-python -m build ./ -o "${DISTDIR}"
+rm -rf dist/*
+mkdir -p dist
+python -m build ./ -o dist/
 rm -rf src/*egg-info
 
 # Successful release will create a `dist/*.tar.gz` and a `dist/*.whl`.
