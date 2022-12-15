@@ -130,7 +130,7 @@ if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == re
         ${PROJ}:dev run-tests
 
     if [[ "${GITBRANCH}" == release ]]; then
-        docker rm "${PROJ}-release"
+        docker rm "${PROJ}-release" &>/dev/null || true
         docker run \
             --workdir="${DOCKER_SRCDIR}" \
             --name="${PROJ}"-release \
