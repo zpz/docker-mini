@@ -2,7 +2,8 @@
 
 This repo defines a small Docker image that contains tools for my Docker workflow.
 
-This image is the next step after [`zppz/tiny`](https://github.com/zpz/docker-tiny). While `zppz/tiny` is quite stable, `zppz/mini` may evolve relatively fast. The stable image `zppz/tiny` contains commands, among other tools, that find the latest version of the image `zppz/mini`.
+This image is the next step after [`zppz/tiny`](https://github.com/zpz/docker-tiny).
+While `zppz/tiny` is quite stable, `zppz/mini` may evolve relatively fast. The stable image `zppz/tiny` contains commands, among other tools, that find the latest version of the image `zppz/mini`.
 
 This image contains scripts relevant to *pip-based* repos and *docker-based* repos.
 The first type of repos develops a Python package with dependencies specified by a `pyproject.toml` file.

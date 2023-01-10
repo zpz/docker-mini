@@ -66,6 +66,10 @@ branch=$(cat "${thisdir}/.git/HEAD")
 GITBRANCH=${branch##*refs/heads/}  # remove the longest substr from front
 echo "Branch: ${GITBRANCH}"
 
+if [[ "${GITBRANCH}" == release ]]; then
+    rm -rf "${thisdir}/dist"
+fi
+
 
 # In the real workflow, `$TINY`, `$MINI`, and `$PARENT` are already defined in the script that calls the current script.
 # Here we allow them to be missing so that the current script can be invoked directly
@@ -135,7 +139,6 @@ if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == re
             --workdir="${DOCKER_SRCDIR}" \
             --name="${PROJ}"-release \
             ${PROJ}:dev python -m build '.'
-        rm -rf "${thisdir}/dist"
         docker cp "${PROJ}-release":"${DOCKER_SRCDIR}/dist" "${thisdir}"
         docker rm "${PROJ}-release"
         echo "Release artifacts are saved in '${thisdir}/dist'"

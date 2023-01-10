@@ -41,11 +41,20 @@ fi
 
 
 # Running bandit for security issues
-# python3 -m bandit -r -q -lll "${rootdir}"
+python3 -m bandit -r -q -lll "${rootdir}"
 
 
-# Checking code by `flake8`
-python3 -m flake8 --extend-ignore E203,E231,E501,W503 "${SRC}"
+changed=0
+ruff "${SRC}" || changed=1
+if [[ "${changed}" == 1 ]]; then
+    echo ==\> -\> -\> Fixing some issues by \`ruff --fix\` ...
+    ruff --fix "${SRC}"
+    echo
+    echo Please examine the issues reported/fixed by \`ruff\` and commit/push again.
+    echo
+    exit 1
+fi
+
 
 exit 0
 
