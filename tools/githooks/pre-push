@@ -28,6 +28,7 @@ pkg="${pkg%/}"
 
 
 SRC="${rootdir}/src/${pkg}"
+status=0
 
 changed=$(python3 -m black --check -q "${SRC}"; echo $?)
 if [[ "${changed}" != 0 ]]; then
@@ -36,12 +37,8 @@ if [[ "${changed}" != 0 ]]; then
     echo
     echo Please add the reformatted files in a new commit and push again.
     echo
-    exit 1
+    status=1
 fi
-
-
-# Running bandit for security issues
-python3 -m bandit -r -q -lll "${rootdir}"
 
 
 changed=0
@@ -52,10 +49,14 @@ if [[ "${changed}" == 1 ]]; then
     echo
     echo Please examine the issues reported/fixed by \`ruff\` and commit/push again.
     echo
-    exit 1
+    status=1
 fi
 
 
-exit 0
+# Running bandit for security issues
+python3 -m bandit -r -q -lll "${rootdir}"
+
+
+exit "${status}"
 
 
