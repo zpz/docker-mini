@@ -54,7 +54,7 @@ python -m mypy ${SRC} || true  # MyPy errors do not halt this script
 echo
 echo --- running tests ---
 echo
-py.test --cov=${SRC} ${TESTS}
+py.test --cov=${SRC} --durations=3 ${TESTS}
 # coverage run --source="${thisdir}/src" -m pytest -n auto ${TESTS}
 # coverage report -m
 # Test coverage target is specified in `pyproject.toml`.

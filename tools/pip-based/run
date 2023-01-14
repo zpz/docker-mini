@@ -83,6 +83,7 @@ fi
 
 PARENT="${PARENT:-zppz/py3}"
 PARENT="$(bash -c "${cmd_find}" -- ${PARENT})"  # find the latest version.
+echo "Parent image: ${PARENT}"
 
 DOCKER_SRCDIR=/tmp/src
 # Copy project repo to this location in the image.
