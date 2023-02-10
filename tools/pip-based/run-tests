@@ -24,11 +24,16 @@ SRC="${thisdir}"/src/${PKG}
 TESTS="${thisdir}"/tests
 
 
+# echo
+# echo --- running bandit ---
+# echo
+# bandit -r -lll ${SRC}
+# bandit -r -lll ${TESTS}
+
 echo
-echo --- running bandit ---
+echo --- running security check ---
 echo
-bandit -r -lll ${SRC}
-bandit -r -lll ${TESTS}
+ruff --select S --ignore S101,S102,S103,S104,S108 $(pwd)/
 
 
 echo
