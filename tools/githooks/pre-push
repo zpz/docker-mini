@@ -42,10 +42,10 @@ fi
 
 
 changed=0
-ruff "${SRC}" || changed=1
+ruff --no-cache "${SRC}" || changed=1
 if [[ "${changed}" == 1 ]]; then
     echo ==\> -\> -\> Fixing some issues by \`ruff --fix\` ...
-    ruff --fix "${SRC}"
+    ruff --no-cache --fix "${SRC}"
     echo
     echo Please examine the issues reported/fixed by \`ruff\` and commit/push again.
     echo
