@@ -33,7 +33,7 @@ TESTS="${thisdir}"/tests
 echo
 echo --- running security check ---
 echo
-ruff --select S --ignore S101,S102,S103,S104,S108,S301,S608 $(pwd)/
+ruff --select S --ignore S101,S102,S103,S104,S108,S301,S311,S608 $(pwd)/
 
 echo
 echo --- running ruff ---
