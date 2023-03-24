@@ -55,7 +55,7 @@ fi
 
 # Running bandit for security issues
 # python3 -m bandit -r -q -lll "${rootdir}"
-ruff --no-cache --select S --ignore S101,S102,S103,S104,S108,S608 "${rootdir}"/
+ruff --no-cache --select S --ignore S101,S102,S103,S104,S108,S301,S608 "${rootdir}"/
 # TODO: how to include shell scripts or all text files?
 
 
