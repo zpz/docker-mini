@@ -28,12 +28,14 @@ pkg="${pkg%/}"
 
 
 SRC="${rootdir}/src/${pkg}"
+TESTS="${rootdir}/tests"
+
 status=0
 
-changed=$(python3 -m black --check -q -S "${SRC}"; echo $?)
+changed=$(python3 -m black --check -q -S "${SRC}" "${TESTS}"; echo $?)
 if [[ "${changed}" != 0 ]]; then
     echo ==\> -\> -\> Formatting code by \`black\` ...
-    python3 -m black -S "${SRC}"
+    python3 -m black -S "${SRC}" "${TESTS}"
     echo
     echo Please add the reformatted files in a new commit and push again.
     echo
@@ -42,21 +44,15 @@ fi
 
 
 changed=0
-ruff --no-cache "${SRC}" || changed=1
+python3 -m ruff --no-cache "${SRC}" "${TESTS}" || changed=1
 if [[ "${changed}" == 1 ]]; then
     echo ==\> -\> -\> Fixing some issues by \`ruff --fix\` ...
-    ruff --no-cache --fix "${SRC}"
+    python3 -m ruff --no-cache --fix "${SRC}" "${TESTS}"
     echo
     echo Please examine the issues reported/fixed by \`ruff\` and commit/push again.
     echo
     status=1
 fi
-
-
-# Running bandit for security issues
-# python3 -m bandit -r -q -lll "${rootdir}"
-ruff --no-cache --select S --ignore S101,S102,S103,S104,S108,S301,S311,S608 "${rootdir}"/
-# TODO: how to include shell scripts or all text files?
 
 
 exit "${status}"
