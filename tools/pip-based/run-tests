@@ -1,6 +1,12 @@
 #!/bin/bash
 
 # Run this script in the root dir of the repo within the container launched by `./run`.
+# Repo needs to make sure these dependencies are installed:
+#
+#   ruff
+#   pytest, and any pytest plugins that are needed
+#
+# If you use `py.test` directly, which does not run this script, then `ruff` is not needed.
 
 
 set -e
@@ -27,7 +33,7 @@ TESTS="${thisdir}"/tests
 echo
 echo --- running ruff ---
 echo
-python3 -m ruff ${SRC} ${TESTS}
+python3 -m ruff --no-cache ${SRC} ${TESTS}
 
 
 echo
@@ -47,7 +53,7 @@ python3 -m mypy ${SRC} || true  # MyPy errors do not halt this script
 echo
 echo --- running tests ---
 echo
-py.test --cov=${SRC} --durations=3 ${TESTS}
+py.test --cov=${SRC} ${TESTS}
 # coverage run --source="${thisdir}/src" -m pytest -n auto ${TESTS}
 # coverage report -m
 # Test coverage target is specified in `pyproject.toml`.

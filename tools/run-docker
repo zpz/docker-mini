@@ -133,10 +133,13 @@ if [[ "${imagename}" != *:* && "${imagename}" != */* ]]; then
     if [ -d "${HOSTWORKDIR}/src/${imagename}" ]; then
         # It is a source repo.
         imagename=${imagename}:dev
+    elif [[ ${imagename} == data ]]; then
+        # Special name to inspect content of the data volume.
+        imagename=zppz/py3
     elif [[ ${imagename} == py3 ]]; then
         imagename=zppz/py3
     fi
-    # If neither the above, it's not a source repo.
+    # If none the above, it's not a source repo.
     # Assume it's a shorthand for a frozen image.
 fi
 
@@ -181,6 +184,11 @@ fi
 # `$imagename` contains neither namespace nor tag.
 
 
+DATAVOLUME=docker-data-volume
+MOUNTPOINT="${DOCKERHOMEDIR}/mnt"
+opts="${opts} --mount source=${DATAVOLUME},target=${MOUNTPOINT}"
+
+
 if [[ "${args}" == '' && " /bin/bash /bin/sh /usr/bin/bash /usr/bin/sh bash sh python ptpython ptipython ipython " == *" ${command} "* ]]; then
     opts="${opts} -it"
 fi
@@ -202,7 +210,7 @@ if [[ " ${opts} " != *" --restart="* && " ${opts}} " != *" -d "* ]]; then
 fi
 
 if [[ "$(which nvidia-smi 2>/dev/null)" != '' && "${gpu_devices}" != none ]]; then
-    # opts="${opts} --runtime=nvidia"
+    opts="${opts} --runtime=nvidia"
     opts="${opts} -e NVIDIA_VISIBLE_DEVICES=${gpu_devices}"
     # or --gpus=all ?
     # TODO: look into the option `--gpus` to `docker run`.
@@ -212,13 +220,17 @@ opts="${opts} -e HOST_NAME=$(uname) -e HOST_WHOAMI=$(whoami)"
 if [[ "$(uname)" == Linux ]]; then
     # opts="${opts} -e HOST_IP=$(hostname -i)"
     opts="${opts} -e HOST_IP=$(ip route get 1 | awk '{gsub("^.*src ",""); print $1; exit}')"
+elif [[ "$(uname)" == Darwin ]]; then
+    opts="${opts} -e HOST_IP=$(ipconfig getifaddr en0)"
 fi
 
 if [[ "${command}" == "notebook" ]]; then
     opts="${opts} --expose=${nb_port} -p ${nb_port}:${nb_port}"
-    opts="${opts} -e JUPYTER_DATA_DIR=/home/docker-user/tmp/.jupyter/data"
-    opts="${opts} -e JUPYTER_RUNTIME_DIR=/home/docker-user/tmp/.jupyter/runtime"
-    command="jupyter notebook --port=${nb_port} --no-browser --ip=0.0.0.0 --NotebookApp.notebook_dir='${DOCKERHOMEDIR}/${PROJ}' --NotebookApp.token=''"
+    opts="${opts} -e JUPYTER_DATA_DIR=${MOUNTPOINT}/tmp/.jupyter/data"
+    opts="${opts} -e JUPYTER_RUNTIME_DIR=${MOUNTPOINT}/tmp/.jupyter/runtime"
+    opts="${opts} -e JUPYTERLAB_WORKSPACES_DIR=${MOUNTPOINT}/tmp/.jupyter/workspaces -e JUPYTERLAB_SETTINGS_DIR=${MOUNTPOINT}/tmp/.jupyter/settings"
+    # command="jupyter lab --port=${nb_port} --no-browser --ip=0.0.0.0 --NotebookApp.notebook_dir='${DOCKERHOMEDIR}/${PROJ}' --NotebookApp.token=''"
+    command="jupyter lab --port=${nb_port} --no-browser --ip=0.0.0.0 --NotebookApp.token=''"
 fi
 
 
@@ -230,9 +242,6 @@ opts="${opts}
 --init"
 
 
-DATAVOLUME=docker-data-volume
-MOUNTPOINT="${DOCKERHOMEDIR}/mnt"
-opts="${opts} --mount source=${DATAVOLUME},target=${MOUNTPOINT}"
 
 docker run ${opts} ${IMAGENAME} ${command} ${args}
 

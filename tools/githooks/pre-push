@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Called by `git push` after it has checked the remote status,
+# but before anything has been pushed.
+# If this script exits with a non-zero status, nothing will be pushed.
+#
+# This script is run OUTSIDE OF DOCKER.
+# Install dependencies on the dev machine:
+#
+#     python3 -m pip install ruff black
+
 
 set -e
 remote="$1"
@@ -32,6 +41,7 @@ TESTS="${rootdir}/tests"
 
 status=0
 
+# `black -S`: do not change between single/double quotes; leave them as is.
 changed=$(python3 -m black --check -q -S "${SRC}" "${TESTS}"; echo $?)
 if [[ "${changed}" != 0 ]]; then
     echo ==\> -\> -\> Formatting code by \`black\` ...
@@ -40,9 +50,15 @@ if [[ "${changed}" != 0 ]]; then
     echo Please add the reformatted files in a new commit and push again.
     echo
     status=1
+    # We do not auto commit the changes here.
+    # It's hard to take care of all scenarios, e.g. there may be a file
+    # that was changed (unrelated to formatting) but we are not ready to
+    # commit and push it yet, hence the file was not included in the last commit.
 fi
 
 
+# User should configure what to check/ignore by `ruff` in section `[tool.ruff]`
+# in `pyproject.toml`.
 changed=0
 python3 -m ruff --no-cache "${SRC}" "${TESTS}" || changed=1
 if [[ "${changed}" == 1 ]]; then

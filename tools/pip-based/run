@@ -83,6 +83,16 @@ fi
 
 PARENT="${PARENT:-zppz/py3}"
 PARENT="$(bash -c "${cmd_find}" -- ${PARENT})"  # find the latest version.
+if [[ $(uname -s) == Darwin && $(uname -p) == arm ]]; then
+    if [[ $(docker images -q ${PARENT}) == '' ]]; then
+        >&2 echo "Cannot find the parent image '${PARENT}'."
+        exit 1
+    fi
+    if [[ $(docker image inspect -f "{{.Architecture}}" ${PARENT}) != arm64 ]]; then
+        >&2 echo "The parent image '${PARENT}' on this machine is not optimized for the CPU architecture."
+        exit 1
+    fi
+fi
 echo "Parent image: ${PARENT}"
 
 DOCKER_SRCDIR=/tmp/src
