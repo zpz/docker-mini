@@ -34,7 +34,9 @@ command=/bin/bash  # the command to be run within the container
 args=""  # args to `command`
 opts=""  # args to `docker run`
 nb_port=8888
-gpu_devices=all
+# gpu_devices=all
+gpu_devices=none
+
 
 # You can specify specific GPUs to use, e.g.
 # -e NVIDIA_VISIBLE_DEVICES=none

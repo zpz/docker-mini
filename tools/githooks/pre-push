@@ -7,7 +7,7 @@
 # This script is run OUTSIDE OF DOCKER.
 # Install dependencies on the dev machine:
 #
-#     python3 -m pip install ruff black
+#     python3 -m pip install -U ruff
 
 
 set -e
@@ -42,10 +42,12 @@ TESTS="${rootdir}/tests"
 status=0
 
 # `black -S`: do not change between single/double quotes; leave them as is.
-changed=$(python3 -m black --check -q -S "${SRC}" "${TESTS}"; echo $?)
+# changed=$(python3 -m black --check -q -S "${SRC}" "${TESTS}"; echo $?)
+changed=$(python3 -m ruff format --check -q "${SRC}" "${TESTS}" >/dev/null 2>&1; echo $?)
+
 if [[ "${changed}" != 0 ]]; then
-    echo ==\> -\> -\> Formatting code by \`black\` ...
-    python3 -m black -S "${SRC}" "${TESTS}"
+    echo ==\> -\> -\> Formatting code by \`ruff\` ...
+    python3 -m ruff format "${SRC}" "${TESTS}"
     echo
     echo Please add the reformatted files in a new commit and push again.
     echo
