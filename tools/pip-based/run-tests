@@ -30,7 +30,7 @@ SRC="${thisdir}"/src/${PKG}
 TESTS="${thisdir}"/tests
 
 
-pip-install -U ruff mypy >/dev/null || true
+python3 -m pip install -U ruff mypy
 
 
 echo
