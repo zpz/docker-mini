@@ -124,7 +124,7 @@ RUN extras=\$(python -c "import toml; print(','.join(toml.load('\${pyproj}')['pr
     && pip-install ${DOCKER_SRCDIR}/[\${extras}] \\
     && python -m pip uninstall -y \$(python -c "import toml; print(toml.load('\${pyproj}')['project']['name'])")
 
-COPY --from=mini-image /tools/pip-based/run-tests /usr/local/bin
+COPY --from=mini-image /tools/run-tests /usr/local/bin
 RUN chmod +x /usr/local/bin/run-tests
 
 USER docker-user

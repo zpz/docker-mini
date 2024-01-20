@@ -44,6 +44,7 @@ status=0
 # `black -S`: do not change between single/double quotes; leave them as is.
 # changed=$(python3 -m black --check -q -S "${SRC}" "${TESTS}"; echo $?)
 changed=$(python3 -m ruff format --check -q "${SRC}" "${TESTS}" >/dev/null 2>&1; echo $?)
+# See https://stackoverflow.com/a/876242 for redirection.
 
 if [[ "${changed}" != 0 ]]; then
     echo ==\> -\> -\> Formatting code by \`ruff\` ...
