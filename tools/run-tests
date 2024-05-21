@@ -36,7 +36,7 @@ python3 -m pip install -U ruff mypy || true
 echo
 echo --- running ruff ---
 echo
-python3 -m ruff --no-cache ${SRC} ${TESTS}
+python3 -m ruff check --no-cache ${SRC} ${TESTS}
 
 
 echo
