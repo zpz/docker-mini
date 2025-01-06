@@ -152,7 +152,7 @@ if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == re
 else
     # Take a free ride to config githooks
     git config --local core.hooksPath "${thisdir}/.githooks/"
-    chmod +x "${thisdir}/.githooks/pre-commit" | (>&2 echo 'pre-commit file is missing' && exit 1)
+    chmod +x "${thisdir}/.githooks/pre-commit"
 
     rm -f "${thisdir}"/Dockerfile
     run-docker ${PROJ}:dev
