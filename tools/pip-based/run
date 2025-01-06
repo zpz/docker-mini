@@ -32,6 +32,28 @@
 
 set -e
 
+
+# In the real workflow, `$PARENT` is already defined in the script that calls the current script.
+# Here we allow it to be missing so that the current script can be invoked directly
+# during development and debugging of this script.
+PARENT="${PARENT:-zppz/py3:24.12.16}"
+
+if [[ $(uname -s) == Darwin && $(uname -p) == arm ]]; then
+    # On Mac, we do not pull the parent image from a remote registry,
+    # but rather require a locally-built one to exist, because
+    # the remotely-stored images are for arm64 architecture only.
+    if [[ $(docker images -q ${PARENT}) == '' ]]; then
+        >&2 echo "Cannot find the parent image '${PARENT}'."
+        exit 1
+    fi
+    if [[ $(docker image inspect -f "{{.Architecture}}" ${PARENT}) != arm64 ]]; then
+        >&2 echo "The parent image '${PARENT}' on this machine is not optimized for the CPU architecture."
+        exit 1
+    fi
+fi
+echo "Parent image: ${PARENT}"
+
+
 thisdir="$(cd $( pwd ) && pwd)"  # full path; do not use `${BASH_SOURCE[0]}` b/c this script is not invoked directly.
 echo "Work directory: ${thisdir}"
 
@@ -66,42 +88,12 @@ branch=$(cat "${thisdir}/.git/HEAD")
 GITBRANCH=${branch##*refs/heads/}  # remove the longest substr from front
 echo "Branch: ${GITBRANCH}"
 
-if [[ "${GITBRANCH}" == release ]]; then
-    rm -rf "${thisdir}/dist"
-fi
-
-
-# In the real workflow, `$TINY`, `$MINI`, and `$PARENT` are already defined in the script that calls the current script.
-# Here we allow them to be missing so that the current script can be invoked directly
-# during development and debugging of this script.
-TINY="${TINY:-zppz/tiny:22.12.11}"
-cmd_find="$(docker run --rm ${TINY} cat /tools/find-image)"
-
-if [[ -z "${MINI}" ]]; then
-    MINI="$(bash -c "${cmd_find}" -- zppz/mini)"
-fi
-
-PARENT="${PARENT:-zppz/py3}"
-PARENT="$(bash -c "${cmd_find}" -- ${PARENT})"  # find the latest version.
-if [[ $(uname -s) == Darwin && $(uname -p) == arm ]]; then
-    if [[ $(docker images -q ${PARENT}) == '' ]]; then
-        >&2 echo "Cannot find the parent image '${PARENT}'."
-        exit 1
-    fi
-    if [[ $(docker image inspect -f "{{.Architecture}}" ${PARENT}) != arm64 ]]; then
-        >&2 echo "The parent image '${PARENT}' on this machine is not optimized for the CPU architecture."
-        exit 1
-    fi
-fi
-echo "Parent image: ${PARENT}"
 
 DOCKER_SRCDIR=/tmp/src
 # Copy project repo to this location in the image.
 
 rm -f "${thisdir}"/Dockerfile
 cat <<EOF >"${thisdir}"/Dockerfile
-FROM ${MINI} as mini-image
-
 FROM ${PARENT}
 USER root
 
@@ -110,10 +102,10 @@ ENV PARENT_IMAGE=${PARENT}
 # If the repo needs non-Python dependencies, will need a mechanism
 # to insert a block to install other things, or use user-defined Dockerfile.
 
-
 # Install the package of the current repo along with all its required and optional
-# dependencies. Then, uninstall the project package itself and remove the source code from the image,
-# leaving the dependencies in place.
+# dependencies. Then, uninstall the project package itself,
+# leaving the dependencies in place. The source code is left in the image in order to run tests;
+# otherwise it will be largely forgotten.
 # Dev and test within the container will use volume-mapped live code.
 
 ARG DOCKER_SRCDIR
@@ -123,9 +115,6 @@ ARG pyproj="${DOCKER_SRCDIR}/pyproject.toml"
 RUN extras=\$(python -c "import toml; print(','.join(toml.load('\${pyproj}')['project']['optional-dependencies'].keys()))") \\
     && pip-install ${DOCKER_SRCDIR}/[\${extras}] \\
     && python -m pip uninstall -y \$(python -c "import toml; print(toml.load('\${pyproj}')['project']['name'])")
-
-COPY --from=mini-image /tools/run-tests /usr/local/bin
-RUN chmod +x /usr/local/bin/run-tests
 
 USER docker-user
 EOF
@@ -142,9 +131,11 @@ if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == re
         -e PROJ="${PROJ}" \
         --workdir="${DOCKER_SRCDIR}" \
         -e PYTHONPATH="${DOCKER_SRCDIR}"/src \
-        ${PROJ}:dev run-tests
+        ${PROJ}:dev py.test "src/${PKG}" "tests"
 
     if [[ "${GITBRANCH}" == release ]]; then
+        rm -rf "${thisdir}/dist"
+
         docker rm "${PROJ}-release" &>/dev/null || true
         docker run \
             --workdir="${DOCKER_SRCDIR}" \
@@ -161,7 +152,7 @@ if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == re
 else
     # Take a free ride to config githooks
     git config --local core.hooksPath "${thisdir}/.githooks/"
-    chmod +x "${thisdir}/.githooks/pre-push"
+    chmod +x "${thisdir}/.githooks/pre-commit" | (>&2 echo 'pre-commit file is missing' && exit 1)
 
     rm -f "${thisdir}"/Dockerfile
     run-docker ${PROJ}:dev

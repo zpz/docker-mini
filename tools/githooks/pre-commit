@@ -1,9 +1,8 @@
 #!/bin/bash
 
-# Called by `git push` after it has checked the remote status,
-# but before anything has been pushed.
-# If this script exits with a non-zero status, nothing will be pushed.
-#
+# Install this file as a pre-commit hook,
+# If this script exits with a non-zero status, commit will not proceed.
+
 # This script is run OUTSIDE OF DOCKER.
 # Install dependencies on the dev machine:
 #
@@ -11,8 +10,6 @@
 
 
 set -e
-remote="$1"
-url="$2"
 
 thisfile="${BASH_SOURCE[0]}"
 thisdir="$(cd "$(dirname "${thisfile}")"; pwd)"
@@ -22,6 +19,8 @@ if [[ "$(basename "${thisdir}")" != .githooks ]]; then
     # script should have ensured that `pwd` is the repo's root directory.
     rootdir="$(pwd)"
 else
+    # In this case, the script is in folder `.githooks/`, so we go
+    # one level up into the root directory of the repo.
     rootdir="$(dirname "${thisdir}")"
 fi
 
@@ -41,6 +40,8 @@ TESTS="${rootdir}/tests"
 
 status=0
 
+
+
 # `black -S`: do not change between single/double quotes; leave them as is.
 # changed=$(python3 -m black --check -q -S "${SRC}" "${TESTS}"; echo $?)
 changed=$(python3 -m ruff format --check -q "${SRC}" "${TESTS}" >/dev/null 2>&1; echo $?)
@@ -50,13 +51,13 @@ if [[ "${changed}" != 0 ]]; then
     echo ==\> -\> -\> Formatting code by \`ruff\` ...
     python3 -m ruff format "${SRC}" "${TESTS}"
     echo
-    echo Please add the reformatted files in a new commit and push again.
+    echo Please add the reformatted files and commit again.
     echo
     status=1
-    # We do not auto commit the changes here.
+    # We do not commit the changes here by `git add -u`.
     # It's hard to take care of all scenarios, e.g. there may be a file
-    # that was changed (unrelated to formatting) but we are not ready to
-    # commit and push it yet, hence the file was not included in the last commit.
+    # that was changed (unrelated to formatting) but was intentionally not added to the commit,
+    # while `git add -u` would add it to the commit.
 fi
 
 
@@ -68,10 +69,19 @@ if [[ "${changed}" == 1 ]]; then
     echo ==\> -\> -\> Fixing some issues by \`ruff --fix\` ...
     python3 -m ruff check --no-cache --fix "${SRC}" "${TESTS}"
     echo
-    echo Please examine the issues reported/fixed by \`ruff\` and commit/push again.
+    echo Please examine the issues reported/fixed by \`ruff\`; if all is good, please add them and commit again.
     echo
     status=1
 fi
+
+
+
+# echo
+# echo --- running mypy ---
+# echo
+# # python -m mypy --show-error-codes --disable-error-code import ${SRC} || true
+# python3 -m mypy ${SRC} || true  # MyPy errors do not halt this script
+
 
 
 exit "${status}"
