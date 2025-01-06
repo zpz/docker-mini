@@ -131,7 +131,7 @@ if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == re
         -e PROJ="${PROJ}" \
         --workdir="${DOCKER_SRCDIR}" \
         -e PYTHONPATH="${DOCKER_SRCDIR}"/src \
-        ${PROJ}:dev py.test "src/${PKG}" "tests"
+        ${PROJ}:dev py.test --cov="src/${PKG}" "tests"
 
     if [[ "${GITBRANCH}" == release ]]; then
         rm -rf "${thisdir}/dist"
