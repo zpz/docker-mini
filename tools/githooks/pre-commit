@@ -46,7 +46,6 @@ status=0
 # changed=$(python3 -m black --check -q -S "${SRC}" "${TESTS}"; echo $?)
 changed=$(python3 -m ruff format --check -q "${SRC}" "${TESTS}" >/dev/null 2>&1; echo $?)
 # See https://stackoverflow.com/a/876242 for redirection.
-
 if [[ "${changed}" != 0 ]]; then
     echo ==\> -\> -\> Formatting code by \`ruff\` ...
     python3 -m ruff format "${SRC}" "${TESTS}"
@@ -59,4 +58,31 @@ if [[ "${changed}" != 0 ]]; then
     # that was changed (unrelated to formatting) but was intentionally not added to the commit,
     # while `git add -u` would add it to the commit.
 fi
+
+
+# User should configure what to check/ignore by `ruff` in section `[tool.ruff]`
+# in `pyproject.toml`.
+changed=0
+python3 -m ruff check --no-cache -q "${SRC}" "${TESTS}" || changed=1
+if [[ "${changed}" == 1 ]]; then
+    echo ==\> -\> -\> Fixing some issues by \`ruff --fix\` ...
+    python3 -m ruff check --no-cache --fix "${SRC}" "${TESTS}"
+    echo
+    echo Please examine the issues reported/fixed by \`ruff\`\; if all is good, please add them and commit again.
+    echo
+    status=1
+fi
+
+
+
+# echo
+# echo --- running mypy ---
+# echo
+# # python -m mypy --show-error-codes --disable-error-code import ${SRC} || true
+# python3 -m mypy ${SRC} || true  # MyPy errors do not halt this script
+
+
+
+exit "${status}"
+
 
