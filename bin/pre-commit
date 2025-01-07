@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Place this script in `$HOME/work/src/<repo>.githooks/` and make it executable.
+
+# Run in a subshell so that directory changes do not take effect for the user.
+(
+    thisfile="${BASH_SOURCE[0]}"
+    cd "$(dirname "${thisfile}")"
+    cd ..
+    bash <(curl -s https://raw.githubusercontent.com/zpz/docker-mini/main/tools/githooks/pre-commit) $@
+)
+
