@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# This is the end-user command.
+# Copy this script into /usr/local/bin and do `chmod +x run-docker`.
+
+TINY=zppz/tiny:22.12.11
+MINI=$(bash -c "$(docker run --rm ${TINY} cat /tools/find-image)" -- zppz/mini)
+status="$?"
+if [[ "${status}" == 6 ]]; then
+    # Could be because the machine is not connected to the internet.
+    # Try to use MINI on this machine if present.
+    MINI=$(bash -c "$(docker run --rm ${TINY} cat /tools/find-local-image)" -- zppz/mini)
+    if [[ "$?" != 0 ]]; then
+        >&2 echo Could not find image MINI. Are you connected to the internet?
+        exit 1
+    fi
+    echo Using local MINI ...
+elif [[ "${status}" != 0 ]]; then
+    >&2 echo Could not find image MINI; status code "$?"
+    exit 1
+fi
+
+cmd="$(docker run --rm ${MINI} cat /tools/run-docker)"
+bash -c "${cmd}" -- $@

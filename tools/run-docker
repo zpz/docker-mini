@@ -14,8 +14,7 @@ Usage:
 
 where
 
-`image-name` is like 'zppz/py3', etc.
-If image tag is not specified, the latest tag is inferred and used.
+`image-name` is either the a source repo name (optionally with appended ":dev") in `~/work/src/` or the full image tag.
 
 `cmd` is the command to be run within the container, followed by arguments to the command.
 (Default: /bin/bash)
@@ -123,7 +122,6 @@ fi
 
 HOSTWORKDIR="${HOME-/tmp}/work"
 DOCKERHOMEDIR="/home/docker-user"
-TINY=${TINY:-zppz/tiny:22.12.11}
 
 
 if [[ "${imagename}" != *:* && "${imagename}" != */* ]]; then
@@ -135,14 +133,10 @@ if [[ "${imagename}" != *:* && "${imagename}" != */* ]]; then
     if [ -d "${HOSTWORKDIR}/src/${imagename}" ]; then
         # It is a source repo.
         imagename=${imagename}:dev
-    elif [[ ${imagename} == data ]]; then
-        # Special name to inspect content of the data volume.
-        imagename=zppz/py3
-    elif [[ ${imagename} == py3 ]]; then
-        imagename=zppz/py3
+    else
+        >&2 echo Cannot find source directory \"${HOSTWORKDIR}/src/${imagename}\" for image \"${imagename}\"
+        exit 1
     fi
-    # If none the above, it's not a source repo.
-    # Assume it's a shorthand for a frozen image.
 fi
 
 if [[ "${imagename}" == *:dev ]]; then
@@ -154,27 +148,15 @@ if [[ "${imagename}" == *:dev ]]; then
 
     HOSTSRCDIR="${HOSTWORKDIR}/src/${PROJ}"
     if [ ! -d "${HOSTSRCDIR}" ]; then
-        >&2 echo Cannot find source directory \"${HOSTSRCDIR}\"
+        >&2 echo Cannot find source directory \"${HOSTSRCDIR}\" for image \"${imagename}:dev\"
         exit 1
     fi
 
     opts="${opts} -v ${HOSTSRCDIR}:${DOCKERHOMEDIR}/${PROJ} --workdir=${DOCKERHOMEDIR}/${PROJ}"
     opts="${opts} -e PYTHONPATH=${DOCKERHOMEDIR}/${PROJ}/src"
 else
-    if (( $(echo "${imagename}" | tr -cd '/' | wc -c) < 2 )); then
-        # `$imagename` does not contain more than one '/', hence is not
-        # a full Docker image name.
-        cmd="$(docker run --rm ${TINY} cat /tools/find-image)"
-        IMAGENAME=$(bash -c "${cmd}" -- ${imagename})
-
-        if [ -z ${IMAGENAME} ]; then
-            >&2 echo Could not find image ${imagename}
-            exit 1
-        fi
-    else
-        # `$imagename` is the full name.
-        IMAGENAME="${imagename}"
-    fi
+    # `$imagename` is the full name.
+    IMAGENAME="${imagename}"
 
     imageversion=${IMAGENAME##*:}  # remove the longest substr from front
     imagename=${IMAGENAME%:*}  # remove the shortest substr from back
