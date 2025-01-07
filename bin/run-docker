@@ -3,4 +3,4 @@
 # This is the end-user command.
 # Copy this script into /usr/local/bin and do `chmod +x run-docker`.
 
-bash <(curl -s https://raw.githubusercontent.com/zpz/docker-mini/main/bin/run-docker) $@
+bash <(curl -s https://raw.githubusercontent.com/zpz/docker-mini/main/tools/run-docker) $@
