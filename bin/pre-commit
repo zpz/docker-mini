@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Place this script in `$HOME/work/src/<repo>.githooks/` and make it executable.
+# This is used once githooks is set up, which is done for you in `tools/pip-based/run`.
 
 # Run in a subshell so that directory changes do not take effect for the user.
 (

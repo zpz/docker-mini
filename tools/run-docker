@@ -14,7 +14,7 @@ Usage:
 
 where
 
-`image-name` is either the a source repo name (optionally with appended ":dev") in `~/work/src/` or the full image tag.
+`image-name` is either the a source repo name (optionally with appended ":dev") in `~/work/src/` or the full image name (with path and tag).
 
 `cmd` is the command to be run within the container, followed by arguments to the command.
 (Default: /bin/bash)

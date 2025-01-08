@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Place this script in the root directory of a repo.
+# The PARENT version may be adjusted as needed.
 
 export PARENT=zppz/py3:24.12.16
 bash <(curl -s https://raw.githubusercontent.com/zpz/docker-mini/main/tools/pip-based/run) $@

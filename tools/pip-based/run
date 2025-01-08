@@ -26,6 +26,7 @@
 # You can edit code outside of the container, then run tests inside the container.
 
 # This script should be run from the root directory of the repo.
+#
 # This script does not use Python.
 # Python is used while "building the Docker image"; in that context, Python is provided by the base image.
 
@@ -60,8 +61,8 @@ echo "Work directory: ${thisdir}"
 
 # Infer the project name.
 # This is the name of the parent directory, but we infer it from Git config to be more reliable.
-proj="$(grep 'url = ' "${thisdir}"/.git/config)"  # get the line like '   url = git@github.com:zpz/docker-mini.git'
-proj="${proj##*/}"  # remove the longest substr from front, keeping 'docker-mini.git'
+proj="$(grep 'url = ' "${thisdir}"/.git/config)"  || proj="$(basename $(pwd))" # get the line like '   url = git@github.com:zpz/docker-mini.git'
+proj="${proj##*/}"  # remove the longest substr from front of '/', keeping "docker-mini.git"
 PROJ="${proj%.git}"  # remove substr from back
 if [[ "${PROJ}" == *_* ]]; then
     >&2 "Project name '${PROJ}' contains underscore. Use dash instead."
@@ -124,6 +125,8 @@ docker build --no-cache -f "${thisdir}"/Dockerfile -t ${PROJ}:dev "${thisdir}"
 echo
 
 if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == release ]]; then
+    bash .githooks/pre-commit
+
     docker run --rm \
         -e IMAGE_NAME=${PROJ} \
         -e IMAGE_VERSION=dev \
