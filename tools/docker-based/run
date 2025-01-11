@@ -3,31 +3,14 @@
 # In the root directory of a Python project repo, there is a script called `run`.
 # This script prepares a few env vars, then run the current script.
 #
-# The code relies on `pyproject.toml` to specify dependencies and various project info.
-# A Dockerfile is generated on the fly in this script.
-# While building the image,
-# the Python package being developed in the repo is installed with all its mandatory and optional
-# dependencies; then the repo package itself is uninstalled, leaving the dependencies installed.
+# This script is similar to the one in `pip-based`, except for these main differences:
 #
-# The Docker image thus built is named zppz/<pkg>:dev
-#
-# Subsequent behavior depends on what Git branch is current.
-#
-# If branch is `main` or `master` or `release`,
-# then all tests are run.
-# If the branch is `release`, it further makes a release of the package.
-# The release artifacts will appear in `dist/` under the root of the repo.
-#
-# If branch is any other, then it is assumed user is doing development.
-# `run-docker` is then used to determine various `docker-run` settings and finally
-# launch a container based on the newly built image, landing within the container
-# ready for development testing. The repo directory is volume-mapped into the container,
-# hence any test runs will use the latest code on the hosting machine.
-# You can edit code outside of the container, then run tests inside the container.
+# - This script builds a Docker images using the `docker/Dockerfile` in the repo.
+# - The Dockerfile does not access anything outside of the `docker/` folder; if the build needs any supporting
+#   resources, they should be in that folder as well.
+# - The repo's `pyproject.toml` does not specify any dependencies; all dependencies are specified in the `Dockerfile`.
 
 # This script should be run from the root directory of the repo.
-#
-# This script does not use Python.
 
 
 set -e
@@ -90,49 +73,28 @@ echo "Branch: ${GITBRANCH}"
 
 
 DOCKER_SRCDIR=/tmp/src
-# Copy project repo to this location in the image.
 
-rm -f "${thisdir}"/Dockerfile
-cat <<EOF >"${thisdir}"/Dockerfile
-FROM ${PARENT}
-USER root
+HOST_IS_MAC="$(if [ $(uname -s) = Darwin ]; then echo 1 ; fi)"
+HOST_IS_LINUX="$(if [ $(uname -s) = Linux ]; then echo 1 ; fi)"
+HOST_HAS_GPU="$(if [ $(which nvidia-smi) ]; then echo 1 ; fi)"
 
-ENV PARENT_IMAGE=${PARENT}
-
-# If the repo needs non-Python dependencies, will need a mechanism
-# to insert a block to install other things, or use user-defined Dockerfile.
-
-# Install the package of the current repo along with all its required and optional
-# dependencies. Then, uninstall the project package itself,
-# leaving the dependencies in place. The source code is left in the image in order to run tests;
-# otherwise it will be largely forgotten.
-# Dev and test within the container will use volume-mapped live code.
-
-ARG DOCKER_SRCDIR
-COPY --chown=docker-user:docker-user . "${DOCKER_SRCDIR}"
-ARG pyproj="${DOCKER_SRCDIR}/pyproject.toml"
-
-RUN extras=\$(python -c "import toml; print(','.join(toml.load('\${pyproj}')['project']['optional-dependencies'].keys()))") \\
-    && pip-install ${DOCKER_SRCDIR}/[\${extras}] \\
-    && python -m pip uninstall -y \$(python -c "import toml; print(toml.load('\${pyproj}')['project']['name'])")
-
-USER docker-user
-EOF
-
-
-docker build --no-cache -f "${thisdir}"/Dockerfile -t ${PROJ}:dev "${thisdir}"
+docker build --no-cache -f "${thisdir}/docker/Dockerfile" \
+    --build-arg PARENT="${PARENT}" \
+    --build-arg HOST_IS_MAC="${HOST_IS_MAC}" \
+    --build-arg HOST_IS_LINUX="${HOST_IS_LINUX}" \
+    --build-arg HOST_HAS_GPU="${HOST_HAS_GPU}" \
+    -t ${PROJ}:dev \
+    "${thisdir}/docker"
 echo
+
 
 if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == release ]]; then
     bash "${thisdir}/.githooks/pre-commit"
 
     docker run --rm \
-        -e IMAGE_NAME=${PROJ} \
-        -e IMAGE_VERSION=dev \
-        -e PKG="${PKG}" \
-        -e PROJ="${PROJ}" \
-        --workdir="${DOCKER_SRCDIR}" \
-        -e PYTHONPATH="${DOCKER_SRCDIR}"/src \
+        -v ${thisdir}:/home/docker-user/tmp/${PROJ} \
+        -e PYTHONPATH="/home/docker-user/tmp/${PROJ}/src" \
+        --workdir="/home/docker-user/tmp/${PROJ}" \
         ${PROJ}:dev py.test --cov="src/${PKG}" "tests"
 
     if [[ "${GITBRANCH}" == release ]]; then
@@ -140,23 +102,19 @@ if [[ "${GITBRANCH}" == main || "${GITBRANCH}" == master || "${GITBRANCH}" == re
 
         docker rm "${PROJ}-release" &>/dev/null || true
         docker run \
-            --workdir="${DOCKER_SRCDIR}" \
+            -v ${thisdir}:/home/docker-user/tmp/${PROJ} \
+            --workdir="/home/docker-user/tmp/${PROJ}" \
             --name="${PROJ}"-release \
             ${PROJ}:dev python -m build '.'
-        docker cp "${PROJ}-release":"${DOCKER_SRCDIR}/dist" "${thisdir}"
-        docker rm "${PROJ}-release"
         echo "Release artifacts are saved in '${thisdir}/dist'"
         # Successful release will create a `dist/*.tar.gz` and a `dist/*.whl`.
-        # Outside of Docker, upload the package to PyPI by
-        #   $ python3 -m twine upload dist/*
     fi
-    rm -f "${thisdir}"/Dockerfile
 else
     # Take a free ride to config githooks
     if [ -d "${thisdir}/.git" ]; then
         git config --local core.hooksPath "${thisdir}/.githooks/"
         chmod +x "${thisdir}/.githooks/pre-commit"
     fi
-    rm -f "${thisdir}"/Dockerfile
+
     run-docker ${PROJ}:dev
 fi
